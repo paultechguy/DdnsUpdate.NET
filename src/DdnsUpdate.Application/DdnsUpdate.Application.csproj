@@ -1,0 +1,88 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <Version>0.1.0</Version>
+        <AssemblyName>ddnsupdate</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+        <PackageReference Include="Serilog.Enrichers.Environment" Version="2.3.0" />
+        <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
+        <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.0" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="5.0.0" />
+        <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+        <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\DdnsUpdate.Core\DdnsUpdate.Core.csproj" />
+      <ProjectReference Include="..\DdnsUpdate.DdnsProvider.Cloudflare\DdnsUpdate.DdnsProvider.Cloudflare.csproj" />
+      <ProjectReference Include="..\DdnsUpdate.Email\DdnsUpdate.Email.csproj" />
+      <ProjectReference Include="..\DdnsUpdate.Service\DdnsUpdate.Service.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="config\appsettings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\appsettings.production.json">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+        </None>
+        <None Update="config\appsettings.production.user.json">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+        </None>
+        <None Update="plugins\readme.txt">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="service_setup\linux_daemon_setup\daemon_install.sh">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="service_setup\linux_daemon_setup\daemon_uninstall.sh">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="service_setup\linux_daemon_setup\ddnsupdate.service">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="service_setup\windows_service_setup\service_install.ps1">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="service_setup\windows_service_setup\service_uninstall.ps1">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+        <Choose>
+            <When Condition="'$(Configuration)'=='Debug'">
+                <ItemGroup>
+                    <None Update="config\appsettings.development.json">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                    </None>
+                    <None Update="config\appsettings.development.user.json">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                    </None>
+                </ItemGroup>
+            </When>
+            <When Condition="'$(Configuration)'=='Release'">
+                <ItemGroup>
+                    <None Update="config\appsettings.production.json">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                    </None>
+                </ItemGroup>
+            </When>
+        </Choose>
+</Project>
