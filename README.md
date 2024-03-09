@@ -2,13 +2,16 @@
 
 The primary use case for this application is to update Cloudflare DNS records with an externally visible IP address.  It will allow you to continuously update your Cloudflare DNS records using the Cloudflare dynamic DNS (DDNS) API.  The application can be used on Windows or Linux.
 
-## Terminology
-For the purpose of this document, the use of the word *application* refers to the DdnsUpdate.NET application.
-
 ## Requirements
 - Cloudflare account with one or more domains
 - Windows 10 or higher (Windows-x64) or Linux Ubuntu (Linux-x64)
 - Visual Studio 2022 with .NET 8 (if you want to review the source code)
+
+## Download Now
+Here you can download the [latest release](https://github.com/paultechguy/DdnsUpdate.NET/releases) that contains the Windows and Linux packages along with source code.
+
+## Terminology
+For the purpose of this document, the use of the word *application* refers to the DdnsUpdate.NET application.
 
 ## Take A Test Drive
 Before you configure the application to update your Cloudflare DNS records with our external IP address, you should test the application to make sure it works with the default configuration.  Doing this will ensure the configuration is correct and features such as logging are working.
