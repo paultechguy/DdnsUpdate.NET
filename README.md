@@ -27,7 +27,7 @@ Unpack the deployment file into a directory.  The directory will contain the fol
     linux_daemon_setup (directory)
     ddnsupdate
 
-> For the purposed of this document, the application file, `ddnsupdate`, refers to both the Linux application file or the Windows application file (`ddnsupdate.exe`).
+> Note: For the purposed of this document, the application file, `ddnsupdate`, refers to both the Linux application file or the Windows application file (`ddnsupdate.exe`).
 
 To test the application:
 1. Open a command window
@@ -124,7 +124,7 @@ If you have more than one DNS record to configure, you can also enter default va
         }
     ]
 
->In this example, we opted to enter the zone ID in `domains` property rather than the defaults. This is because zone IDs tend to be specific for different domains.
+>Note: In this example, we opted to enter the zone ID in `domains` property rather than the defaults. This is because zone IDs tend to be specific for different domains.
 
 You can now test the application to determine if the new configuration values are correct, and if your Cloudflare DNS records are updating correctly.  Executing the application in a command window should indicate your domain(s) are updated:
 
@@ -155,10 +155,10 @@ To execute the application as a Windows Service, you first install the service. 
 ### Install the Windows Service
 Please note that when the application is installed as a service, the files in the unpacked application directory are copied to other well-known system directories.  If you want to change a DNS configuration in the `appsettings.production.json` file, you would need to update the file in the service location.  The service locations are:
 
-* ddnsupdate => C:\Program Files\DdnsUpdate
-* config => C:\ProgramData\DdnsUpdate\config
-* data => C:\ProgramData\DdnsUpdate\data
-* logs => C:\ProgramData\DdnsUpdate\logs
+    ddnsupdate => C:\Program Files\DdnsUpdate
+    config => C:\ProgramData\DdnsUpdate\config
+    data => C:\ProgramData\DdnsUpdate\data
+    logs => C:\ProgramData\DdnsUpdate\logs
 
 To install the service, open a Windows PowerShell window, with administrator privileges, and run the installation script:
 
@@ -184,23 +184,23 @@ To execute the application as a Linux Daemon, you first install the daemon. Once
 ### Install the Linux Daemon
 Please note that when the application is installed as a daemon, the files in the unpacked application directory are copied  to other well-known system directories. If you want to change a DNS configuration in the `appsettings.production.json` file, you would need to update the file in the daemon location.  The daemon locations are:
 
-* ddnsupdate => /usr/sbin
-* config => /etc/ddnsupdate
-* data => /var/lib/ddnsupdate
-* logs => /var/log/ddnsupdate
+    ddnsupdate => /usr/sbin
+    config => /etc/ddnsupdate
+    data => /var/lib/ddnsupdate
+    logs => /var/log/ddnsupdate
 
 > Note: To execute the installation script, you might need the permissions on the script:
 > `chmod 0755 linux_daemon_setup/*`
 
 To install the daemon, open a command window, and run the installation script:
 
-    sudo ./linux_daemon_setup\daemon_install.sh
+    sudo ./linux_daemon_setup/daemon_install.sh
 
 > Note that by default, the installed daemon is configured to automatically start when Linux starts up.
 
 To uninstall the daemon, run the uninstall script:
 
-    sudo ./linux_daemon_setup\daemon_uninstall.sh
+    sudo ./linux_daemon_setup/daemon_uninstall.sh
 
 To start, stop, and get the daemon status, use the Linux `systemctl` command:
 
@@ -214,7 +214,7 @@ You can view the application logs in the `/var/log/ddnsupdate` directory.
 The default functionality is for the application to loop every sixty (60) minutes and update DNS records with the most recent external IP address. You can change this behavior by modifying the number of minutes to pause after each DDS update. This is found in the `appsettings.production.json` file.
 
     "ddnsSettings": {
-        "afterAllDdnsUpdatePauseMinutes": 10,
+        "afterAllDdnsUpdatePauseMinutes": 60,
         ...
     },
 
@@ -246,7 +246,7 @@ To enable email, you will need to access to an external SMTP email server.  Once
           "serverPassword": ""
         }
 
-    > For localhost testing using Windows, you can use [Papercut-SMTP](https://www.papercut-smtp.com/).  This is an excellent tool to verify email is working on a production deployment.
+    > Note: For localhost testing using Windows, you can use [Papercut-SMTP](https://www.papercut-smtp.com/).  This is an excellent tool to verify email is working on a production deployment.
 
     ### Gmail SMTP Configuration
     See [Gmail Help](https://support.google.com/mail/answer/185833) for assistance in creating Gmail application passwords.
@@ -269,6 +269,8 @@ Using Windows Task Scheduler, create a task and add an Action. Set the `Program/
 
 Each time the task is triggered by the Windows Task Scheduler, it will update all DNS records and then exit.  It is up to you to set the number of times the task is executed over time (i.e. Triggers) in the Windows Task Scheduler.
 
+> Note: Setting `maximumDdnsUpdateIterations` to zero allows an unlmited number of iterations.
+
 ## License
 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
 
@@ -276,4 +278,4 @@ Each time the task is triggered by the Windows Task Scheduler, it will update al
 PaulTechGuy
 
 ## Contact
-[dev@ddnsupdate.net](mailto:dev@ddnsupdate.net)
+[github@ddnsupdate.net](mailto:github@ddnsupdate.net)
