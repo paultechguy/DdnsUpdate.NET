@@ -1,3 +1,4 @@
+# create local package (clp)
 param(
     [Parameter(Mandatory=$true)]
     [string]$publishPath,
