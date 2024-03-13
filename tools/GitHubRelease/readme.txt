@@ -1,4 +1,4 @@
-How to manage GitHub releases and their artifacts using the GitHub gb CLI.*
+How to manage GitHub releases and their artifacts using the GitHub gh CLI.*
 
 
 Create Release with Tag
