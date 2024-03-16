@@ -1,5 +1,5 @@
 ﻿// -------------------------------------------------------------------------
-// <copyright file="IWorkerService.cs" company="PaulTechGuy">
+// <copyright file="IPluginManager.cs" company="PaulTechGuy">
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>
 // Use of this source code is governed by Apache License 2.0 that can
@@ -8,10 +8,17 @@
 
 namespace DdnsUpdate.Core.Interfaces;
 
-using System.Threading.Tasks;
 using DdnsUpdate.DdnsProvider.Interfaces;
 
-public interface IWorkerService
+public interface IPluginManager
 {
-   Task ExecuteAsync(IDdnsUpdateProvider ddnsUpdateProvider, CancellationToken cancelToken);
+   void ClearProviders();
+
+   IList<IDdnsUpdateProvider> Providers { get; }
+
+   int ProviderCount { get; }
+
+   string[] ProviderNames { get; }
+
+   int AddProviders(string directoryPath, bool recursive);
 }

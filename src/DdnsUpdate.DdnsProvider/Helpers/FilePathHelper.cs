@@ -26,6 +26,64 @@ public static class FilePathHelper
 
    private static string dataDirectory = string.Empty;
 
+   private static string pluginDirectory = string.Empty;
+
+   public static string ApplicationPluginDirectory
+   {
+      get
+      {
+         if (string.IsNullOrEmpty(pluginDirectory))
+         {
+            if (OperatingSystem.IsLinux())
+            {
+               if (!EnvironmentHelper.IsLinuxDaemon)
+               {
+                  // interactive, local to the app itself
+                  //   ./plugins
+                  pluginDirectory = Path.Combine(
+                     AppDomain.CurrentDomain.BaseDirectory,
+                     "plugins");
+               }
+               else
+               {
+                  // for daemons
+                  //   /etc/ddnspdate/plugins
+                  pluginDirectory = Path.Combine(
+                     "/etc",
+                     ApplicationName.ToLower(),
+                     "plugins");
+               }
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+               if (Environment.UserInteractive)
+               {
+                  // interactive, local to the app itself
+                  //   .\plugins
+                  pluginDirectory = Path.Combine(
+                     AppDomain.CurrentDomain.BaseDirectory,
+                     "plugins");
+               }
+               else
+               {
+                  // Windows service in program_data
+                  //   \ProgramData\ddnsupdate\config
+                  pluginDirectory = Path.Combine(
+                     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                     ApplicationName.ToLower(),
+                     "plugins");
+               }
+            }
+            else
+            {
+               throw new InvalidOperationException($"Invalid {nameof(OperatingSystem)} for config; not supported");
+            }
+         }
+
+         return pluginDirectory;
+      }
+   }
+
    public static string ApplicationConfigDirectory
    {
       get
@@ -45,10 +103,11 @@ public static class FilePathHelper
                else
                {
                   // for daemons
-                  //   /etc/ddnspdate
+                  //   /etc/ddnspdate/config
                   configDirectory = Path.Combine(
                      "/etc",
-                     ApplicationName.ToLower());
+                     ApplicationName.ToLower(),
+                     "config");
                }
             }
             else if (OperatingSystem.IsWindows())
@@ -92,6 +151,7 @@ public static class FilePathHelper
                if (!EnvironmentHelper.IsLinuxDaemon)
                {
                   // interactive, local to the app itself
+                  //   ./data
                   dataDirectory = Path.Combine(
                      AppDomain.CurrentDomain.BaseDirectory,
                      "data");
@@ -99,10 +159,11 @@ public static class FilePathHelper
                else
                {
                   // for daemons
-                  //   /var/lib/ddnsupdate
+                  //   /var/lib/ddnsupdate/data
                   dataDirectory = Path.Combine(
                      "/var/lib",
-                     ApplicationName.ToLower());
+                     ApplicationName.ToLower(),
+                     "data");
                }
             }
             else if (OperatingSystem.IsWindows())
@@ -157,7 +218,8 @@ public static class FilePathHelper
                   //   /var/logs/ddnsupdate
                   logDirectory = Path.Combine(
                      "/var/log",
-                     ApplicationName.ToLower());
+                     ApplicationName.ToLower(),
+                     "logs");
                }
             }
             else if (OperatingSystem.IsWindows())
@@ -173,7 +235,7 @@ public static class FilePathHelper
                else
                {
                   // Windows service in program_data
-                  //   \ProgramData\ddnsupdate/logs
+                  //   \ProgramData\ddnsupdate\logs
                   logDirectory = Path.Combine(
                      Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                      ApplicationName.ToLower(),

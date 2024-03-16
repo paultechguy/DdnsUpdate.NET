@@ -15,4 +15,8 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\DdnsUpdate.DdnsProvider\DdnsUpdate.DdnsProvider.csproj" />
+  </ItemGroup>
+
 </Project>

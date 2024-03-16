@@ -24,25 +24,24 @@ public partial class WorkerService(
    ILogger<WorkerService> logger,
    IEmailSender emailSender,
    IHttpClientFactory clientFactory,
-   IDdnsUpdateProvider ddnsUpdateProvider,
    CommandLineOptions commandLineOptions) : IWorkerService
 {
+   private const int OneMinuteMilliseconds = 60000;
    private const string LastIpAddressFileName = "LastIpAddress.txt";
    private const string UriStatisticsFileName = "UriStatistics.json";
-   private const int OneMinuteMilliseconds = 60000;
+   private static readonly object LastIpAddressFileLock = new();
+   private static readonly object UriStatisticsFileLock = new();
    private readonly IConfiguration configuration = configuration;
    private readonly ILogger<WorkerService> logger = logger;
    private readonly IHttpClientFactory clientFactory = clientFactory;
    private readonly IEmailSender emailSender = emailSender;
-   private readonly IDdnsUpdateProvider ddnsUpdateProvider = ddnsUpdateProvider;
    private readonly CommandLineOptions commandLineOptions = commandLineOptions;
    private readonly Random rndIpAddressProvider = new();
    private readonly Regex ipAddressRegex = EmbeddedIpAddressRegEx();
-   private readonly object uriStatisticsLock = new();
    private ApplicationSettings appSettings = new();
    private UriStatistics uriStatistics = [];
 
-   public async Task ExecuteAsync(CancellationToken cancelToken)
+   public async Task ExecuteAsync(IDdnsUpdateProvider ddnsUpdateProvider, CancellationToken cancelToken)
    {
       // When this method exits, the application will stop.  If this is a service, you typically will
       // stay in a "while" loop until a cancellation is requested.  If this is a schedule task or
@@ -80,7 +79,7 @@ public partial class WorkerService(
             // while we were executing
             this.RefreshApplicationSettings();
 
-            List<string> updateDomainNames = await this.ddnsUpdateProvider.GetDomainNamesAsync();
+            List<string> updateDomainNames = await ddnsUpdateProvider.GetDomainNamesAsync();
             if (updateDomainNames.Count > 0)
             {
                // get new and last known ip addresses
@@ -115,7 +114,7 @@ public partial class WorkerService(
                this.logger.LogInformation($"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
 
                // update all ddns records...woo hoo
-               await this.UpdateDomainIpAddresses(updateDomainNames, loopCounter, ip, cancelToken);
+               await this.UpdateDomainIpAddresses(ddnsUpdateProvider, updateDomainNames, loopCounter, ip, cancelToken);
             }
             else
             {
@@ -150,6 +149,7 @@ public partial class WorkerService(
    }
 
    private async Task UpdateDomainIpAddresses(
+      IDdnsUpdateProvider ddnsUpdateProvider,
       List<string> domainNames,
       int loopCounter,
       string ipAddress,
@@ -169,7 +169,7 @@ public partial class WorkerService(
          if (!cancelToken.IsCancellationRequested)
          {
             HttpClient client = this.clientFactory.CreateClient();
-            _ = await this.UpdateDomainIpAddressAsync(loopCounter, ipAddress, client, domainName);
+            _ = await this.UpdateDomainIpAddressAsync(ddnsUpdateProvider, loopCounter, ipAddress, client, domainName);
 
             // no need to dispose of client
          }
@@ -198,12 +198,13 @@ public partial class WorkerService(
    }
 
    private async Task<bool> UpdateDomainIpAddressAsync(
+      IDdnsUpdateProvider ddnsUpdateProvider,
       int counter,
       string ip,
       HttpClient client,
       string domainName)
    {
-      DdnsProviderSuccessResult updateResult = await this.ddnsUpdateProvider.TryUpdateIpAddressAsync(
+      DdnsProviderSuccessResult updateResult = await ddnsUpdateProvider.TryUpdateIpAddressAsync(
          client,
          domainName,
          ip);
@@ -370,7 +371,10 @@ public partial class WorkerService(
          return string.Empty;
       }
 
-      return File.ReadAllText(filePath);
+      lock (LastIpAddressFileLock)
+      {
+         return File.ReadAllText(filePath);
+      }
    }
 
    private void SaveLastIpAddress(string ipAddress)
@@ -382,7 +386,10 @@ public partial class WorkerService(
          Directory.CreateDirectory(folder);
       }
 
-      File.WriteAllText(filePath, ipAddress);
+      lock (LastIpAddressFileLock)
+      {
+         File.WriteAllText(filePath, ipAddress);
+      }
    }
 
    private void LogInitialIpAddress()
@@ -407,7 +414,7 @@ public partial class WorkerService(
    {
       try
       {
-         lock (this.uriStatisticsLock)
+         lock (UriStatisticsFileLock)
          {
             // just Wait inside lock
             this.uriStatistics.WriteFileAsync(GetUriStatisticsFilePath()).Wait();
@@ -430,7 +437,7 @@ public partial class WorkerService(
       if (Path.Exists(filePath))
       {
          // load existing uris with their stats
-         lock (this.uriStatisticsLock)
+         lock (UriStatisticsFileLock)
          {
             // just Wait inside lock
             this.uriStatistics = UriStatistics.ReadFileAsync(filePath).Result;

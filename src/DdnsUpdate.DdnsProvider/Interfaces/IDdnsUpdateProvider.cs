@@ -10,6 +10,7 @@ namespace DdnsUpdate.DdnsProvider.Interfaces;
 
 using System.Threading.Tasks;
 using DdnsUpdate.DdnsProvider.Models;
+using Microsoft.Extensions.Configuration;
 
 /// <summary>
 /// An interface representing the contract for a DDNS provided that updates domain
@@ -20,7 +21,14 @@ public interface IDdnsUpdateProvider
    /// <summary>
    /// The text name of the DDNS provider that provides IP address updates.
    /// </summary>
-   public string ProviderName { get; }
+   string ProviderName { get; set; }
+
+   /// <summary>
+   /// Provides an <see cref="IConfiguration"/> interface to the provider.  This will
+   /// occur before any other methods are called.
+   /// </summary>
+   /// <param name="configuration"></param>
+   void SetConfiguration(IConfiguration configuration);
 
    /// <summary>
    /// Get all the domain names that need a DNS update using the latest IP address.

@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DdnsUpdate.Core\DdnsUpdate.Core.csproj" />
-    <ProjectReference Include="..\DdnsUpdate.DdnsProvider.Cloudflare\DdnsUpdate.DdnsProvider.Cloudflare.csproj" />
+    <ProjectReference Include="..\DdnsUpdate.DdnsProvider\DdnsUpdate.DdnsProvider.csproj" />
   </ItemGroup>
 
 </Project>

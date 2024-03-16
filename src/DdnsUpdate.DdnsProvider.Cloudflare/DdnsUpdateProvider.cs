@@ -18,13 +18,19 @@ using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.DdnsProvider.Models;
 using Microsoft.Extensions.Configuration;
 
-public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvider
+public class DdnsUpdateProvider() : IDdnsUpdateProvider
 {
-   private readonly IConfiguration configuration = configuration;
+   private IConfiguration? configuration;
    private CloudflareSettings applicationSettings = new();
 
    /// <inheritdoc/>
-   public string ProviderName => "Cloudflare API";
+   public string ProviderName { get; set; } = "Cloudflare API";
+
+   /// <inheritdoc/>
+   public void SetConfiguration(IConfiguration configuration)
+   {
+      this.configuration = configuration;
+   }
 
    /// <inheritdoc/>
    public async Task<List<string>> GetDomainNamesAsync()
@@ -156,7 +162,7 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
 
    private void RefreshApplicationSettings()
    {
-      this.applicationSettings = this.configuration.GetSection("cloudflareSettings").Get<CloudflareSettings>() ?? throw new InvalidOperationException();
+      this.applicationSettings = this.configuration!.GetSection("cloudflareSettings").Get<CloudflareSettings>() ?? throw new InvalidOperationException();
    }
 
    private string GetSettingsAuthorizationEmail(CloudflareDomain domain)

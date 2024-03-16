@@ -73,12 +73,10 @@ public partial class Program
 
       // normal DI stuff
       _ = services.AddTransient<IWorkerService, WorkerService>();
+      _ = services.AddTransient<IPluginManager, PluginManager>();
       _ = services.AddTransient<IEmailSender, EmailSender>();
       _ = services.AddSingleton(this.commandLineOptions);
       _ = services.AddHostedService<WindowsBackgroundService>();
-
-      // DDNS update provider...sort of a big thing
-      _ = services.AddTransient<IDdnsUpdateProvider, DdnsUpdate.DdnsProvider.Cloudflare.DdnsUpdateProvider>();
 
       // disable the default aspnet status messages that appear in console/log about startup
       _ = services.Configure<ConsoleLifetimeOptions>(options => options.SuppressStatusMessages = true);
