@@ -40,6 +40,7 @@ public partial class WorkerService(
    private readonly Regex ipAddressRegex = EmbeddedIpAddressRegEx();
    private ApplicationSettings appSettings = new();
    private UriStatistics uriStatistics = [];
+   private IDdnsUpdateProvider ddnsUpdateProvider;
 
    public async Task ExecuteAsync(IDdnsUpdateProvider ddnsUpdateProvider, CancellationToken cancelToken)
    {
@@ -51,6 +52,9 @@ public partial class WorkerService(
 
       try
       {
+         // set so we don't have to pass this all over
+         this.ddnsUpdateProvider = ddnsUpdateProvider;
+
          // we refresh here mainly so that any initial logging will have the proper values
          this.RefreshApplicationSettings();
 
@@ -79,7 +83,7 @@ public partial class WorkerService(
             // while we were executing
             this.RefreshApplicationSettings();
 
-            List<string> updateDomainNames = await ddnsUpdateProvider.GetDomainNamesAsync();
+            List<string> updateDomainNames = await this.ddnsUpdateProvider.GetDomainNamesAsync();
             if (updateDomainNames.Count > 0)
             {
                // get new and last known ip addresses
@@ -114,7 +118,7 @@ public partial class WorkerService(
                this.logger.LogInformation($"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
 
                // update all ddns records...woo hoo
-               await this.UpdateDomainIpAddresses(ddnsUpdateProvider, updateDomainNames, loopCounter, ip, cancelToken);
+               await this.UpdateDomainIpAddresses(updateDomainNames, loopCounter, ip, cancelToken);
             }
             else
             {
@@ -149,7 +153,6 @@ public partial class WorkerService(
    }
 
    private async Task UpdateDomainIpAddresses(
-      IDdnsUpdateProvider ddnsUpdateProvider,
       List<string> domainNames,
       int loopCounter,
       string ipAddress,
@@ -169,7 +172,7 @@ public partial class WorkerService(
          if (!cancelToken.IsCancellationRequested)
          {
             HttpClient client = this.clientFactory.CreateClient();
-            _ = await this.UpdateDomainIpAddressAsync(ddnsUpdateProvider, loopCounter, ipAddress, client, domainName);
+            _ = await this.UpdateDomainIpAddressAsync(loopCounter, ipAddress, client, domainName);
 
             // no need to dispose of client
          }
@@ -198,13 +201,12 @@ public partial class WorkerService(
    }
 
    private async Task<bool> UpdateDomainIpAddressAsync(
-      IDdnsUpdateProvider ddnsUpdateProvider,
       int counter,
       string ip,
       HttpClient client,
       string domainName)
    {
-      DdnsProviderSuccessResult updateResult = await ddnsUpdateProvider.TryUpdateIpAddressAsync(
+      DdnsProviderSuccessResult updateResult = await this.ddnsUpdateProvider.TryUpdateIpAddressAsync(
          client,
          domainName,
          ip);
