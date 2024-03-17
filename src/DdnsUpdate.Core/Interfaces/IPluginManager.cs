@@ -8,6 +8,7 @@
 
 namespace DdnsUpdate.Core.Interfaces;
 
+using DdnsUpdate.DdnsProvider;
 using DdnsUpdate.DdnsProvider.Interfaces;
 
 public interface IPluginManager
@@ -20,5 +21,5 @@ public interface IPluginManager
 
    string[] ProviderNames { get; }
 
-   int AddProviders(string directoryPath, bool recursive);
+   int AddProviders(DdnsUpdateProviderInstanceContext context, string directoryPath, bool recursive);
 }

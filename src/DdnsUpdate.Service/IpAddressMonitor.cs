@@ -1,5 +1,5 @@
 ﻿// -------------------------------------------------------------------------
-// <copyright file="WorkerService.cs" company="PaulTechGuy">
+// <copyright file="IpAddressMonitorService.cs" company="PaulTechGuy">
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>
 // Use of this source code is governed by Apache License 2.0 that can
@@ -11,20 +11,23 @@ namespace DdnsUpdate.Service;
 using System.Collections.Generic;
 using System.Net;
 using System.Text.RegularExpressions;
+using DdnsUpdate.Core.Extensions;
 using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
+using DdnsUpdate.DdnsProvider;
 using DdnsUpdate.DdnsProvider.Helpers;
 using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.DdnsProvider.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-public partial class WorkerService(
+public partial class IpAddressMonitor(
    IConfiguration configuration,
-   ILogger<WorkerService> logger,
+   IPluginManager pluginManager,
+   ILogger<IpAddressMonitor> logger,
    IEmailSender emailSender,
    IHttpClientFactory clientFactory,
-   CommandLineOptions commandLineOptions) : IWorkerService
+   CommandLineOptions commandLineOptions) : IIpAddressMonitorService
 {
    private const int OneMinuteMilliseconds = 60000;
    private const string LastIpAddressFileName = "LastIpAddress.txt";
@@ -32,7 +35,8 @@ public partial class WorkerService(
    private static readonly object LastIpAddressFileLock = new();
    private static readonly object UriStatisticsFileLock = new();
    private readonly IConfiguration configuration = configuration;
-   private readonly ILogger<WorkerService> logger = logger;
+   private readonly IPluginManager pluginManager = pluginManager;
+   private readonly ILogger<IpAddressMonitor> logger = logger;
    private readonly IHttpClientFactory clientFactory = clientFactory;
    private readonly IEmailSender emailSender = emailSender;
    private readonly CommandLineOptions commandLineOptions = commandLineOptions;
@@ -40,9 +44,8 @@ public partial class WorkerService(
    private readonly Regex ipAddressRegex = EmbeddedIpAddressRegEx();
    private ApplicationSettings appSettings = new();
    private UriStatistics uriStatistics = [];
-   private IDdnsUpdateProvider ddnsUpdateProvider;
 
-   public async Task ExecuteAsync(IDdnsUpdateProvider ddnsUpdateProvider, CancellationToken cancelToken)
+   public async Task ExecuteAsync(CancellationToken cancelToken)
    {
       // When this method exits, the application will stop.  If this is a service, you typically will
       // stay in a "while" loop until a cancellation is requested.  If this is a schedule task or
@@ -50,11 +53,9 @@ public partial class WorkerService(
       // the method will exit fairly soon on its own (but you should still check for a cancellation
       // request since the Ctrl-C handler will initiate a cancellation request.
 
+      IList<IDdnsUpdateProvider> providerPlugins = [];
       try
       {
-         // set so we don't have to pass this all over
-         this.ddnsUpdateProvider = ddnsUpdateProvider;
-
          // we refresh here mainly so that any initial logging will have the proper values
          this.RefreshApplicationSettings();
 
@@ -66,6 +67,9 @@ public partial class WorkerService(
          // just for info sake, log the last known IP address (if it exists)
          this.LogInitialIpAddress();
 
+         // load all plugins
+         providerPlugins = this.LoadDdnsUpdateProviderPlugins();
+
          // loop forever until a cancellation request is seen
          int loopCounter = 0;
          while (!cancelToken.IsCancellationRequested)
@@ -73,7 +77,7 @@ public partial class WorkerService(
             // do we need to exit based on the number of updates
             if (this.IsMaximumUpdatesReached(loopCounter))
             {
-               this.logger.LogInformation($"Maximum DDNS updates ({this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations}) reached; stopping");
+               this.logger.LogAny(LogLevel.Information, $"Maximum DDNS updates ({this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations}) reached; stopping");
                break;
             }
 
@@ -83,46 +87,49 @@ public partial class WorkerService(
             // while we were executing
             this.RefreshApplicationSettings();
 
-            List<string> updateDomainNames = await this.ddnsUpdateProvider.GetDomainNamesAsync();
-            if (updateDomainNames.Count > 0)
+            foreach (var ddnsUpdateProvider in providerPlugins)
             {
-               // get new and last known ip addresses
-               (string ip, UriStatisticItem? statsItem) = await this.GetIpAddressV4Async(cancelToken);
-               string lastIpAddress = this.LoadLastIpAddress();
-
-               if (string.IsNullOrWhiteSpace(ip) || statsItem is null)
+               List<string> updateDomainNames = await ddnsUpdateProvider.GetDomainNamesAsync();
+               if (updateDomainNames.Count > 0)
                {
-                  this.logger.LogWarning($"#{loopCounter}: Unable to determine external IP address or cancellation requested");
-                  _ = this.SleepBetweenAllIpUpdates(cancelToken);
+                  // get new and last known ip addresses
+                  (string ip, UriStatisticItem? statsItem) = await this.GetIpAddressV4Async(cancelToken);
+                  string lastIpAddress = this.LoadLastIpAddress();
 
-                  continue;
+                  if (string.IsNullOrWhiteSpace(ip) || statsItem is null)
+                  {
+                     this.logger.LogAny(LogLevel.Warning, $"#{loopCounter}: Unable to determine external IP address or cancellation requested");
+                     _ = this.SleepBetweenAllIpUpdates(cancelToken);
+
+                     continue;
+                  }
+                  else if (lastIpAddress == ip && !this.appSettings.DdnsSettings.AlwaysUpdateDdnsEvenIfUnchanged)
+                  {
+                     // ip is he same as last time, and we bypass ddns updates if they are the same
+                     this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: IP address {ip} unchanged using {statsItem.Uri}; skip {updateDomainNames.Count} DNS update(s)");
+                     _ = this.SleepBetweenAllIpUpdates(cancelToken);
+
+                     continue;
+                  }
+
+                  // remember last ip if it's changed
+                  if (ip != lastIpAddress)
+                  {
+                     this.logger.LogAny(LogLevel.Information, $"New IP address found: {ip}");
+                     await this.SendEmailIpAddressChangedAsync(lastIpAddress, ip, cancelToken); // optional based on config
+                     this.SaveLastIpAddress(ip);
+                  }
+
+                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Current external IP is {ip} via URL {statsItem.Uri}");
+                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
+
+                  // update all ddns records...woo hoo
+                  await this.UpdateDomainIpAddresses(ddnsUpdateProvider, updateDomainNames, loopCounter, ip, cancelToken);
                }
-               else if (lastIpAddress == ip && !this.appSettings.DdnsSettings.AlwaysUpdateDdnsEvenIfUnchanged)
+               else
                {
-                  // ip is he same as last time, and we bypass ddns updates if they are the same
-                  this.logger.LogInformation($"#{loopCounter}: IP address {ip} unchanged using {statsItem.Uri}; skip {updateDomainNames.Count} DNS update(s)");
-                  _ = this.SleepBetweenAllIpUpdates(cancelToken);
-
-                  continue;
+                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: No enabled domains found; skip DNS update(s)");
                }
-
-               // remember last ip if it's changed
-               if (ip != lastIpAddress)
-               {
-                  this.logger.LogInformation($"New IP address found: {ip}");
-                  await this.SendEmailIpAddressChangedAsync(lastIpAddress, ip, cancelToken); // optional based on config
-                  this.SaveLastIpAddress(ip);
-               }
-
-               this.logger.LogInformation($"#{loopCounter}: Current external IP is {ip} via URL {statsItem.Uri}");
-               this.logger.LogInformation($"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
-
-               // update all ddns records...woo hoo
-               await this.UpdateDomainIpAddresses(updateDomainNames, loopCounter, ip, cancelToken);
-            }
-            else
-            {
-               this.logger.LogInformation($"#{loopCounter}: No enabled domains found; skip DNS update(s)");
             }
 
             // sleep if we're not cancelling
@@ -139,8 +146,61 @@ public partial class WorkerService(
       }
       finally
       {
-         this.logger.LogDebug($"Ending: {nameof(WorkerService)}.{nameof(this.ExecuteAsync)}");
+         this.logger.LogAny(LogLevel.Debug, $"Ending: {nameof(IpAddressMonitor)}.{nameof(this.ExecuteAsync)}");
+
+         // now that we've signaled we're done, dispose of plugins; do it after everything in case it bombs, we're basically clean
+         if (providerPlugins != null)
+         {
+            UnloadDdnsUpdateProviderPlugins(providerPlugins);
+         }
       }
+   }
+
+   private IList<IDdnsUpdateProvider> LoadDdnsUpdateProviderPlugins()
+   {
+      // we'll need a context instance when providers are created (ctor call)
+      var loggerContext = new LoggerContext(
+         this.PluginLogInformation,
+         this.PluginLogWarning,
+         this.PluginLogError,
+         this.PluginLogCritical);
+
+      DdnsUpdateProviderInstanceContext contextInstance = new DdnsUpdateProviderInstanceContext(this.configuration, loggerContext);
+
+      // load all plugins from main plugin directory
+      string topLevelPluginDirectory = FilePathHelper.ApplicationPluginDirectory;
+      this.pluginManager.AddProviders(contextInstance, topLevelPluginDirectory, recursive: true);
+
+      return this.pluginManager.Providers;
+   }
+
+   private static void UnloadDdnsUpdateProviderPlugins(IList<IDdnsUpdateProvider> providerPlugins)
+   {
+      // basically, dispose of plugins
+      foreach (var plugin in providerPlugins)
+      {
+         plugin.Dispose();
+      }
+   }
+
+   private void PluginLogInformation(string pluginLogName, string message)
+   {
+      this.logger.LogAny(LogLevel.Information, message, pluginLogName);
+   }
+
+   private void PluginLogWarning(string pluginLogName, string message)
+   {
+      this.logger.LogAny(LogLevel.Warning, message, pluginLogName);
+   }
+
+   private void PluginLogError(string pluginLogName, string message)
+   {
+      this.logger.LogAny(LogLevel.Error, message, pluginLogName);
+   }
+
+   private void PluginLogCritical(string pluginLogName, string message)
+   {
+      this.logger.LogAny(LogLevel.Critical, message, pluginLogName);
    }
 
    private void RefreshApplicationSettings()
@@ -153,6 +213,7 @@ public partial class WorkerService(
    }
 
    private async Task UpdateDomainIpAddresses(
+      IDdnsUpdateProvider ddnsUpdateProvider,
       List<string> domainNames,
       int loopCounter,
       string ipAddress,
@@ -171,8 +232,7 @@ public partial class WorkerService(
       {
          if (!cancelToken.IsCancellationRequested)
          {
-            HttpClient client = this.clientFactory.CreateClient();
-            _ = await this.UpdateDomainIpAddressAsync(loopCounter, ipAddress, client, domainName);
+            _ = await this.UpdateDomainIpAddressAsync(ddnsUpdateProvider, loopCounter, ipAddress, domainName);
 
             // no need to dispose of client
          }
@@ -184,39 +244,38 @@ public partial class WorkerService(
 
    private void LogInitialStartupMessages()
    {
-      this.logger.LogDebug($"Starting: {nameof(WorkerService)}.{nameof(this.ExecuteAsync)}");
+      this.logger.LogAny(LogLevel.Debug, $"Starting: {nameof(IpAddressMonitor)}.{nameof(this.ExecuteAsync)}");
 
       // how often will we be checking for updates
       decimal updateMilliseconds = this.GetUpdatePauseMilliseconds();
-      this.logger.LogInformation($"IP address updates will be performed every {Math.Round(updateMilliseconds / OneMinuteMilliseconds, 2)} minute(s)");
+      this.logger.LogAny(LogLevel.Information, $"IP address updates will be performed every {Math.Round(updateMilliseconds / OneMinuteMilliseconds, 2)} minute(s)");
 
       // will ip address changes generate email notifications
       string notifyUpdates = this.appSettings.WorkerServiceSettings.MessageIsEnabled ? string.Empty : " not";
-      this.logger.LogInformation($"IP address updates will{notifyUpdates} push email notifications");
+      this.logger.LogAny(LogLevel.Information, $"IP address updates will{notifyUpdates} push email notifications");
 
       // put some helpful into in the log (or console) about the data directory
-      this.logger.LogInformation($"config files are in {FilePathHelper.ApplicationConfigDirectory}");
-      this.logger.LogInformation($"log files are in {FilePathHelper.ApplicationLogDirectory}");
-      this.logger.LogInformation($"data files are in {FilePathHelper.ApplicationDataDirectory}");
+      this.logger.LogAny(LogLevel.Information, $"config files are in {FilePathHelper.ApplicationConfigDirectory}");
+      this.logger.LogAny(LogLevel.Information, $"log files are in {FilePathHelper.ApplicationLogDirectory}");
+      this.logger.LogAny(LogLevel.Information, $"data files are in {FilePathHelper.ApplicationDataDirectory}");
    }
 
    private async Task<bool> UpdateDomainIpAddressAsync(
+      IDdnsUpdateProvider ddnsUpdateProvider,
       int counter,
       string ip,
-      HttpClient client,
       string domainName)
    {
-      DdnsProviderSuccessResult updateResult = await this.ddnsUpdateProvider.TryUpdateIpAddressAsync(
-         client,
+      DdnsProviderSuccessResult updateResult = await ddnsUpdateProvider.TryUpdateIpAddressAsync(
          domainName,
          ip);
       if (updateResult.IsSuccess)
       {
-         this.logger.LogInformation($"#{counter}: Domain {domainName}, IP updated to {ip}");
+         this.logger.LogAny(LogLevel.Information, $"#{counter}: Domain {domainName}, IP updated to {ip}");
       }
       else
       {
-         this.logger.LogError($"#{counter}: IP update failed for {domainName}, IP {ip}; {updateResult.Message}");
+         this.logger.LogAny(LogLevel.Error, $"#{counter}: IP update failed for {domainName}, IP {ip}; {updateResult.Message}");
       }
 
       return updateResult.IsSuccess;
@@ -293,7 +352,7 @@ public partial class WorkerService(
       if (!IPAddress.TryParse(foundIp, out ipAddress))
       {
          // hum...something must be wrong with our regex
-         this.logger.LogError($"Internal bug, unable to convert string into IP address: {foundIp}");
+         this.logger.LogAny(LogLevel.Error, $"Internal bug, unable to convert string into IP address: {foundIp}");
 
          return false;
       }
@@ -313,7 +372,7 @@ public partial class WorkerService(
 
       if (!this.appSettings.WorkerServiceSettings.MessageIsEnabled)
       {
-         this.logger.LogWarning("Email support disabled.  See appSettings.WorkerServiceSettings.MessageIsEnabled");
+         this.logger.LogAny(LogLevel.Warning, "Email support disabled.  See appSettings.WorkerServiceSettings.MessageIsEnabled");
 
          return;
       }
@@ -342,11 +401,11 @@ public partial class WorkerService(
                subject,
                body);
 
-            this.logger.LogInformation("IP address email sent; To: {to}, Subject: {subject}", this.appSettings.WorkerServiceSettings.MessageToEmailAddress, subject);
+            this.logger.LogAny(LogLevel.Information, $"IP address email sent; To: {this.appSettings.WorkerServiceSettings.MessageToEmailAddress}, Subject: {subject}");
          }
          catch (Exception ex)
          {
-            this.logger.LogError($"IP address email send failed: {ex.Message}");
+            this.logger.LogAny(LogLevel.Error, $"IP address email send failed: {ex.Message}");
          }
       }
    }
@@ -401,7 +460,7 @@ public partial class WorkerService(
          ? "none found"
          : lastIpAddress;
 
-      this.logger.LogInformation($"Checking for initial IP address: {message}");
+      this.logger.LogAny(LogLevel.Information, $"Checking for initial IP address: {message}");
    }
 
    private bool IsMaximumUpdatesReached(int loopCounter)
@@ -424,7 +483,7 @@ public partial class WorkerService(
       }
       catch (Exception ex)
       {
-         this.logger.LogWarning($"Unable to save {nameof(UriStatistics)}; will try again next iteration  ({ex.Message})");
+         this.logger.LogAny(LogLevel.Warning, $"Unable to save {nameof(UriStatistics)}; will try again next iteration  ({ex.Message})");
 
          // just continue and hopefully thing will work the next time
          // (maybe an editor has the file locked)

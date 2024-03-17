@@ -11,8 +11,10 @@ namespace DdnsUpdate.Service;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.Loader;
 using DdnsUpdate.Core.Interfaces;
+using DdnsUpdate.DdnsProvider;
 using DdnsUpdate.DdnsProvider.Interfaces;
 
 public class PluginManager : IPluginManager
@@ -32,7 +34,7 @@ public class PluginManager : IPluginManager
       .Select(x => x.ProviderName)
       .ToArray();
 
-   public int AddProviders(string directoryPath, bool recursive)
+   public int AddProviders(DdnsUpdateProviderInstanceContext context, string directoryPath, bool recursive)
    {
       int addedCount = 0;
       foreach (string pluginPath in Directory.GetFiles(
@@ -42,14 +44,22 @@ public class PluginManager : IPluginManager
       {
          try
          {
-            System.Reflection.Assembly pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(pluginPath);
+            Assembly pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(pluginPath);
 
             foreach (Type type in pluginAssembly.GetExportedTypes())
             {
                if (typeof(IDdnsUpdateProvider).IsAssignableFrom(type) && type != typeof(IDdnsUpdateProvider))
                {
-                  // create plugin instance
-                  IDdnsUpdateProvider plugin = (IDdnsUpdateProvider)Activator.CreateInstance(type)!;
+                  // does this implementation have the correct ctor parameter
+                  bool hasConstructorWithCorrectType = type.GetConstructors()
+                     .Any(ctor => ctor.GetParameters().Any(param => param.ParameterType == typeof(DdnsUpdateProviderInstanceContext)));
+                  if (!hasConstructorWithCorrectType)
+                  {
+                     throw new InvalidOperationException($"Plugin does not have ctor with {nameof(DdnsUpdateProviderInstanceContext)} type; {pluginPath}");
+                  }
+
+                  // create plugin instance with a ctor having the context parameter
+                  var plugin = (IDdnsUpdateProvider)Activator.CreateInstance(type, context)!;
                   if (plugin is not null)
                   {
                      plugin.ProviderName = this.AdjustPluginName(plugin.ProviderName);

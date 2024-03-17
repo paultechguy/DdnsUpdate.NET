@@ -10,25 +10,17 @@ namespace DdnsUpdate.DdnsProvider.Interfaces;
 
 using System.Threading.Tasks;
 using DdnsUpdate.DdnsProvider.Models;
-using Microsoft.Extensions.Configuration;
 
 /// <summary>
 /// An interface representing the contract for a DDNS provided that updates domain
 /// DNS records.
 /// </summary>
-public interface IDdnsUpdateProvider
+public interface IDdnsUpdateProvider : IDisposable
 {
    /// <summary>
    /// The text name of the DDNS provider that provides IP address updates.
    /// </summary>
    string ProviderName { get; set; }
-
-   /// <summary>
-   /// Provides an <see cref="IConfiguration"/> interface to the provider.  This will
-   /// occur before any other methods are called.
-   /// </summary>
-   /// <param name="configuration"></param>
-   void SetConfiguration(IConfiguration configuration);
 
    /// <summary>
    /// Get all the domain names that need a DNS update using the latest IP address.
@@ -50,13 +42,10 @@ public interface IDdnsUpdateProvider
    /// <summary>
    /// Using the client, update the DNS for domainName with the specified ipAddress.
    /// </summary>
-   /// <param name="client"><see cref="HttpClient"/>. Do not Dispose of the client; it will be
-   /// done for you.</param>
    /// <param name="domainName">The domain name to have a DNS updated (e.g. mycompany.com).</param>
    /// <param name="ipAddress">The IP address to use for a DNS update.</param>
    /// <returns><see cref="DdnsProviderSuccessResult"/>.</returns>
    Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(
-      HttpClient client,
       string domainName,
       string ipAddress);
 }

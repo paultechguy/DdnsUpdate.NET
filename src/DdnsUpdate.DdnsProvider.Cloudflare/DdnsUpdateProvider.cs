@@ -18,20 +18,20 @@ using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.DdnsProvider.Models;
 using Microsoft.Extensions.Configuration;
 
-public class DdnsUpdateProvider() : IDdnsUpdateProvider
+public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstance) : IDdnsUpdateProvider
 {
-   private IConfiguration? configuration;
    private CloudflareSettings applicationSettings = new();
+   private readonly HttpClient client = new();
+   private bool disposedValue;
+   private readonly DdnsUpdateProviderInstanceContext contextInstance = contextInstance;
 
+   public string ProviderLogName { get; set; } = "Cloudflare";
+
+   // Interface required
    /// <inheritdoc/>
    public string ProviderName { get; set; } = "Cloudflare API";
 
-   /// <inheritdoc/>
-   public void SetConfiguration(IConfiguration configuration)
-   {
-      this.configuration = configuration;
-   }
-
+   // Interface required
    /// <inheritdoc/>
    public async Task<List<string>> GetDomainNamesAsync()
    {
@@ -103,9 +103,9 @@ public class DdnsUpdateProvider() : IDdnsUpdateProvider
    }
 
 
+   // Interface required
    /// <inheritdoc/>
    public async Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(
-      HttpClient client,
       string domainName,
       string ipAddress)
    {
@@ -162,7 +162,7 @@ public class DdnsUpdateProvider() : IDdnsUpdateProvider
 
    private void RefreshApplicationSettings()
    {
-      this.applicationSettings = this.configuration!.GetSection("cloudflareSettings").Get<CloudflareSettings>() ?? throw new InvalidOperationException();
+      this.applicationSettings = this.contextInstance.Configuration.GetSection("cloudflareSettings").Get<CloudflareSettings>() ?? throw new InvalidOperationException();
    }
 
    private string GetSettingsAuthorizationEmail(CloudflareDomain domain)
@@ -183,5 +183,35 @@ public class DdnsUpdateProvider() : IDdnsUpdateProvider
    private string GetSettingsZoneId(CloudflareDomain domain)
    {
       return string.IsNullOrWhiteSpace(domain.ZoneId) ? this.applicationSettings.DefaultDomain.ZoneId : domain.ZoneId;
+   }
+
+   protected virtual void Dispose(bool disposing)
+   {
+      if (!disposedValue)
+      {
+         if (disposing)
+         {
+            // dispose managed state (managed objects)
+            this.client.Dispose();
+         }
+
+         // free unmanaged resources (unmanaged objects) and override finalizer
+         // set large fields to null
+         disposedValue = true;
+      }
+   }
+
+   // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+   // ~DdnsUpdateProvider()
+   // {
+   //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+   //     Dispose(disposing: false);
+   // }
+
+   public void Dispose()
+   {
+      // Dd not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+      this.Dispose(disposing: true);
+      GC.SuppressFinalize(this);
    }
 }

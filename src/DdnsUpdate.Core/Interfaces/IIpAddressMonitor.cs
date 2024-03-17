@@ -1,5 +1,5 @@
 ﻿// -------------------------------------------------------------------------
-// <copyright file="IWorkerService.cs" company="PaulTechGuy">
+// <copyright file="IIpAddressMonitorService.cs" company="PaulTechGuy">
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>
 // Use of this source code is governed by Apache License 2.0 that can
@@ -9,9 +9,8 @@
 namespace DdnsUpdate.Core.Interfaces;
 
 using System.Threading.Tasks;
-using DdnsUpdate.DdnsProvider.Interfaces;
 
-public interface IWorkerService
+public interface IIpAddressMonitorService
 {
-   Task ExecuteAsync(IDdnsUpdateProvider ddnsUpdateProvider, CancellationToken cancelToken);
+   Task ExecuteAsync(CancellationToken cancelToken);
 }

@@ -72,11 +72,11 @@ public partial class Program
          defaults.RemoveAllLoggers());
 
       // normal DI stuff
-      _ = services.AddTransient<IWorkerService, WorkerService>();
+      _ = services.AddTransient<IIpAddressMonitorService, IpAddressMonitor>();
       _ = services.AddTransient<IPluginManager, PluginManager>();
       _ = services.AddTransient<IEmailSender, EmailSender>();
       _ = services.AddSingleton(this.commandLineOptions);
-      _ = services.AddHostedService<WindowsBackgroundService>();
+      _ = services.AddHostedService<DdnsUpdateBackgroundService>();
 
       // disable the default aspnet status messages that appear in console/log about startup
       _ = services.Configure<ConsoleLifetimeOptions>(options => options.SuppressStatusMessages = true);
