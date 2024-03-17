@@ -1,15 +1,13 @@
-﻿// -------------------------------------------------------------------------
-// <copyright file="IpAddressMonitorService.cs" company="PaulTechGuy">
-// Copyright (c) Paul Carver. All rights reserved.
-// </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
-// -------------------------------------------------------------------------
+﻿// "// <copyright file=\"IpAddressMonitor.cs\" company=\"PaulTechGuy\">
+// // Copyright (c) Paul Carver. All rights reserved.
+// // </copyright>"
 
 namespace DdnsUpdate.Service;
 
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Net;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using DdnsUpdate.Core.Extensions;
 using DdnsUpdate.Core.Interfaces;
@@ -107,6 +105,8 @@ public partial class IpAddressMonitor(
                continue;
             }
 
+            this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: New external IP is {ip} via URL {statsItem.Uri}");
+
             ////////////////////////////
             // START: MAIN PLUGIN LOOP
             //
@@ -115,15 +115,14 @@ public partial class IpAddressMonitor(
                List<string> updateDomainNames = await ddnsUpdateProvider.GetDomainNamesAsync();
                if (updateDomainNames.Count > 0)
                {
-                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Current external IP is {ip} via URL {statsItem.Uri}");
-                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
+                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s) for {ddnsUpdateProvider.ProviderName}");
 
                   // update all ddns records...woo hoo
                   await this.UpdateDomainIpAddresses(ddnsUpdateProvider, updateDomainNames, loopCounter, ip, cancelToken);
                }
                else
                {
-                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: No enabled domains found; skip DNS update(s)");
+                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: No enabled domain(s) found for {ddnsUpdateProvider.ProviderName}; skip DNS update(s)");
                }
             }
 
@@ -134,8 +133,7 @@ public partial class IpAddressMonitor(
             // remember last ip if it's changed
             if (ip != lastIpAddress)
             {
-               this.logger.LogAny(LogLevel.Information, $"New IP address found: {ip}");
-               await this.SendEmailIpAddressChangedAsync(lastIpAddress, ip, cancelToken); // optional based on config
+               await this.SendEmailIpAddressChangedAsync(providerPlugins, loopCounter, lastIpAddress, ip, cancelToken); // optional based on config
                this.SaveLastIpAddress(ip);
             }
 
@@ -177,6 +175,11 @@ public partial class IpAddressMonitor(
       // load all plugins from main plugin directory
       string topLevelPluginDirectory = FilePathHelper.ApplicationPluginDirectory;
       this.pluginManager.AddProviders(contextInstance, topLevelPluginDirectory, recursive: true);
+
+      foreach (IDdnsUpdateProvider plugin in this.pluginManager.Providers)
+      {
+         this.logger.LogAny(LogLevel.Information, $"{nameof(IDdnsUpdateProvider)} plugin loaded: {plugin.ProviderName}");
+      }
 
       return this.pluginManager.Providers;
    }
@@ -226,33 +229,48 @@ public partial class IpAddressMonitor(
       string ipAddress,
       CancellationToken cancelToken)
    {
-      int maxDegreeOfParallelism = this.appSettings.DdnsSettings.ParallelDdnsUpdateCount < 0
-            ? -1 // unlimited
-            : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount == 0
-               ? domainNames.Count
-               : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount;
-
-      var parallelOptions = new ParallelOptions
+      try
       {
-         MaxDegreeOfParallelism = maxDegreeOfParallelism,
-      };
+         int maxDegreeOfParallelism = this.appSettings.DdnsSettings.ParallelDdnsUpdateCount < 0
+              ? -1 // unlimited
+              : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount == 0
+                ? domainNames.Count
+                : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount;
 
-      // ensure the foreach is completed before continuing
-      var parallelForEachTask = Task.Run(() =>
+         var parallelOptions = new ParallelOptions
          {
-            Parallel.ForEach(domainNames, parallelOptions, async domainName =>
+            MaxDegreeOfParallelism = maxDegreeOfParallelism,
+         };
+
+         // beginning a batch of updates
+         this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Start batch IP address upate for {ddnsUpdateProvider.ProviderName}");
+         await ddnsUpdateProvider.BeginBatchUpdateIpAddressAsync();
+
+         // ensure the foreach is completed before continuing
+         var parallelForEachTask = Task.Run(() =>
+            {
+               Parallel.ForEach(domainNames, parallelOptions, domainName =>
             {
                if (!cancelToken.IsCancellationRequested)
                {
-                  _ = await this.UpdateDomainIpAddressAsync(ddnsUpdateProvider, loopCounter, ipAddress, domainName);
+                  this.UpdateDomainIpAddressAsync(ddnsUpdateProvider, loopCounter, ipAddress, domainName).Wait(); // wait
                }
             });
-         }, cancelToken);
+            }, cancelToken);
 
-      await parallelForEachTask;
+         await parallelForEachTask;
 
-      // now that all updates are done, update stats
-      await this.SaveUriStatisticsAsync();
+         // ending a batch of updates
+         await ddnsUpdateProvider.EndBatchUpdateIpAddressAsync();
+         this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: End batch IP address upate for {ddnsUpdateProvider.ProviderName}");
+
+         // now that all updates are done, update stats
+         await this.SaveUriStatisticsAsync();
+      }
+      catch (Exception ex)
+      {
+         this.logger.LogAny(LogLevel.Critical, $"Exception while updating all domains for {ddnsUpdateProvider.ProviderName}: {ex.Message}");
+      }
    }
 
    private void LogInitialStartupMessages()
@@ -269,6 +287,7 @@ public partial class IpAddressMonitor(
 
       // put some helpful into in the log (or console) about the data directory
       this.logger.LogAny(LogLevel.Information, $"config files are in {FilePathHelper.ApplicationConfigDirectory}");
+      this.logger.LogAny(LogLevel.Information, $"plugin files are in {FilePathHelper.ApplicationPluginDirectory}");
       this.logger.LogAny(LogLevel.Information, $"log files are in {FilePathHelper.ApplicationLogDirectory}");
       this.logger.LogAny(LogLevel.Information, $"data files are in {FilePathHelper.ApplicationDataDirectory}");
    }
@@ -279,12 +298,12 @@ public partial class IpAddressMonitor(
       string ip,
       string domainName)
    {
-      DdnsProviderSuccessResult updateResult = await ddnsUpdateProvider.TryUpdateIpAddressAsync(
+      DdnsProviderStatusResult updateResult = await ddnsUpdateProvider.TryUpdateIpAddressAsync(
          domainName,
          ip);
       if (updateResult.IsSuccess)
       {
-         this.logger.LogAny(LogLevel.Information, $"#{counter}: Domain {domainName}, IP updated to {ip}", ddnsUpdateProvider.ProviderLogName);
+         this.logger.LogAny(LogLevel.Information, $"#{counter}: Domain {domainName}, IP updated to {ip}");
       }
       else
       {
@@ -374,6 +393,8 @@ public partial class IpAddressMonitor(
    }
 
    private async Task SendEmailIpAddressChangedAsync(
+      IList<IDdnsUpdateProvider> providerPlugins,
+      int loopCounter,
       string oldIpAddress,
       string newIpAddress,
       CancellationToken cancelToken)
@@ -385,7 +406,7 @@ public partial class IpAddressMonitor(
 
       if (!this.appSettings.WorkerServiceSettings.MessageIsEnabled)
       {
-         this.logger.LogAny(LogLevel.Warning, "Email support disabled.  See appSettings.WorkerServiceSettings.MessageIsEnabled");
+         this.logger.LogAny(LogLevel.Warning, "#{counter}: Email support disabled.  See appSettings.WorkerServiceSettings.MessageIsEnabled");
 
          return;
       }
@@ -396,10 +417,13 @@ public partial class IpAddressMonitor(
       if (!string.IsNullOrWhiteSpace(this.appSettings.WorkerServiceSettings.MessageFromEmailAddress)
          && !string.IsNullOrWhiteSpace(this.appSettings.WorkerServiceSettings.MessageToEmailAddress))
       {
+         string pluginNames = string.Join(", ", providerPlugins
+             .Select(x => x.ProviderName.Trim()));
          string oldIp = string.IsNullOrWhiteSpace(oldIpAddress) ? "N/A" : oldIpAddress;
          string subject = $"IP address update from {appName}, {DateTime.Now:G}";
          string body = $$"""
             <html><head></head><body>
+            <p><b>Active Plugins</b>: <span>{{pluginNames}}</span></p>
             <p><b>Old IP Address Change</b>: <span>{{oldIp}}</span></p>
             <p><b>New IP Address Change</b>: <span>{{newIpAddress}}</span></p>
             <p>/{{appName}}</p>
@@ -414,11 +438,11 @@ public partial class IpAddressMonitor(
                subject,
                body);
 
-            this.logger.LogAny(LogLevel.Information, $"IP address email sent; To: {this.appSettings.WorkerServiceSettings.MessageToEmailAddress}, Subject: {subject}");
+            this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: IP address email sent; To: {this.appSettings.WorkerServiceSettings.MessageToEmailAddress}, Subject: {subject}");
          }
          catch (Exception ex)
          {
-            this.logger.LogAny(LogLevel.Error, $"IP address email send failed: {ex.Message}");
+            this.logger.LogAny(LogLevel.Error, $"#{loopCounter}: IP address email send failed: {ex.Message}");
          }
       }
    }

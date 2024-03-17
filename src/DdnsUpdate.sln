@@ -39,6 +39,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHubRelease", "GitHubRele
 		..\tools\GitHubRelease\readme.txt = ..\tools\GitHubRelease\readme.txt
 	EndProjectSection
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.DdnsProvider.EmailOnly", "DdnsUpdate.DdnsProvider.EmailOnly\DdnsUpdate.DdnsProvider.EmailOnly.csproj", "{6DC43643-AD94-4C55-A07F-A01CE4817A5B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,10 @@ Global
 		{F264574D-DFD6-4E62-ADF0-44C3F10C48A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F264574D-DFD6-4E62-ADF0-44C3F10C48A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F264574D-DFD6-4E62-ADF0-44C3F10C48A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6DC43643-AD94-4C55-A07F-A01CE4817A5B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DC43643-AD94-4C55-A07F-A01CE4817A5B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DC43643-AD94-4C55-A07F-A01CE4817A5B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DC43643-AD94-4C55-A07F-A01CE4817A5B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -78,6 +84,7 @@ Global
 		{2AF15E19-8954-4C89-8E8D-FFEB864E22F8} = {DDB0A990-F295-48D8-9645-468853DEBF85}
 		{4037AA4A-4347-4F5A-B526-D8159FCAE348} = {2AF15E19-8954-4C89-8E8D-FFEB864E22F8}
 		{CF8D5F50-8E2E-412C-860C-FF4B7CA1CD6E} = {2AF15E19-8954-4C89-8E8D-FFEB864E22F8}
+		{6DC43643-AD94-4C55-A07F-A01CE4817A5B} = {02731B05-FA85-4A6C-9295-CFF2175382DB}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F4D9A72E-EAAC-4A7D-B980-870DF5DDFC69}

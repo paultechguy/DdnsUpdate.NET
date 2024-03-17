@@ -1,19 +1,13 @@
-﻿// -------------------------------------------------------------------------
-// <copyright file="Program_Configure.cs" company="PaulTechGuy">
-// Copyright (c) Paul Carver. All rights reserved.
-// </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
-// -------------------------------------------------------------------------
+﻿// "// <copyright file=\"Program_Configure.cs\" company=\"PaulTechGuy\">
+// // Copyright (c) Paul Carver. All rights reserved.
+// // </copyright>"
 
 namespace DdnsUpdate.Application;
 
 using System;
-using DdnsUpdate.Core;
 using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
 using DdnsUpdate.DdnsProvider.Helpers;
-using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.Email;
 using DdnsUpdate.Service;
 using Microsoft.Extensions.Configuration;

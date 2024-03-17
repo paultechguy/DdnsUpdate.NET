@@ -13,18 +13,18 @@ tab_width = 4
 
 # New line preferences
 end_of_line = crlf
-insert_final_newline = false
+insert_final_newline = true
 
 #### .NET Coding Conventions ####
 
 # Organize usings
 dotnet_separate_import_directive_groups = false
 dotnet_sort_system_directives_first = true
-file_header_template = unset
+file_header_template = "// <copyright file=\"{fileName}\" company=\"PaulTechGuy\">\n// Copyright (c) Paul Carver. All rights reserved.\n// </copyright>"
 
 # this. and Me. preferences
 dotnet_style_qualification_for_event = true:warning
-dotnet_style_qualification_for_field = true
+dotnet_style_qualification_for_field = true:warning
 dotnet_style_qualification_for_method = true:warning
 dotnet_style_qualification_for_property = true:warning
 
@@ -427,12 +427,12 @@ dotnet_diagnostic.SA1632.severity = none
 dotnet_diagnostic.SA1633.severity = none
 dotnet_diagnostic.SA1634.severity = none
 dotnet_diagnostic.SA1635.severity = none
-dotnet_diagnostic.SA1636.severity = none
-dotnet_diagnostic.SA1637.severity = none
-dotnet_diagnostic.SA1638.severity = none
+dotnet_diagnostic.SA1636.severity = warning
+dotnet_diagnostic.SA1637.severity = error
+dotnet_diagnostic.SA1638.severity = error
 dotnet_diagnostic.SA1639.severity = none
 dotnet_diagnostic.SA1640.severity = none
-dotnet_diagnostic.SA1641.severity = none
+dotnet_diagnostic.SA1641.severity = error
 dotnet_diagnostic.SA1642.severity = none
 dotnet_diagnostic.SA1643.severity = none
 dotnet_diagnostic.SA1644.severity = none
@@ -461,7 +461,7 @@ dotnet_style_null_propagation = true:suggestion
 dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
 dotnet_style_prefer_auto_properties = true:suggestion
 dotnet_style_object_initializer = true:suggestion
-dotnet_style_prefer_collection_expression = true:suggestion
+dotnet_style_prefer_collection_expression = when_types_exactly_match:suggestion
 dotnet_style_collection_initializer = true:suggestion
 dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
 dotnet_style_prefer_conditional_expression_over_assignment = true:suggestion

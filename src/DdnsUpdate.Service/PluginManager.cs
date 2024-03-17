@@ -1,10 +1,6 @@
-﻿// -------------------------------------------------------------------------
-// <copyright file="PluginManager.cs" company="PaulTechGuy">
-// Copyright (c) Paul Carver. All rights reserved.
-// </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
-// -------------------------------------------------------------------------
+﻿// "// <copyright file=\"PluginManager.cs\" company=\"PaulTechGuy\">
+// // Copyright (c) Paul Carver. All rights reserved.
+// // </copyright>"
 
 namespace DdnsUpdate.Service;
 
@@ -45,6 +41,12 @@ public class PluginManager : IPluginManager
          try
          {
             Assembly pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(pluginPath);
+
+            // is this plugin disabled by using # prefix
+            if (Path.GetFileName(Path.GetDirectoryName(pluginPath)!).StartsWith("#"))
+            {
+               continue; // skip this plugin directory
+            }
 
             foreach (Type type in pluginAssembly.GetExportedTypes())
             {

@@ -1,10 +1,6 @@
-﻿// -------------------------------------------------------------------------
-// <copyright file="DdnsUpdateProvider.cs" company="PaulTechGuy">
-// Copyright (c) Paul Carver. All rights reserved.
-// </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
-// -------------------------------------------------------------------------
+﻿// "// <copyright file=\"DdnsUpdateProvider.cs\" company=\"PaulTechGuy\">
+// // Copyright (c) Paul Carver. All rights reserved.
+// // </copyright>"
 
 namespace DdnsUpdate.DdnsProvider.Cloudflare;
 
@@ -18,20 +14,17 @@ using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.DdnsProvider.Models;
 using Microsoft.Extensions.Configuration;
 
-public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstance) : IDdnsUpdateProvider
+public class DdnsUpdateProvider(
+   DdnsUpdateProviderInstanceContext contextInstance) : IDdnsUpdateProvider
 {
    private CloudflareSettings applicationSettings = new();
-   private readonly HttpClient client = new();
+   private HttpClient httpClient = null!;
    private bool disposedValue;
    private readonly DdnsUpdateProviderInstanceContext contextInstance = contextInstance;
 
    // Interface required
    /// <inheritdoc/>
-   public string ProviderLogName { get; set; } = "Cloudflare";
-
-   // Interface required
-   /// <inheritdoc/>
-   public string ProviderName { get; set; } = "Cloudflare API";
+   public string ProviderName { get; set; } = "PaulTechGuy.Cloudflare";
 
    // Interface required
    /// <inheritdoc/>
@@ -48,15 +41,11 @@ public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstanc
    }
 
    /// <inheritdoc/>
-   public async Task<DdnsProviderSuccessResult> IsDomainValidAsync(string domainName)
+   public async Task<DdnsProviderStatusResult> IsDomainValidAsync(string domainName)
    {
       // make sure we have all the proper settings; if a domain setting is missing, we just have a default instead
 
-      var result = new DdnsProviderSuccessResult
-      {
-         IsSuccess = false,
-         Message = string.Empty,
-      };
+      DdnsProviderStatusResult result = DdnsProviderStatusResult.Fail;
 
       CloudflareDomain? domain = this.applicationSettings.Domains
          .Where(x => domainName.Equals(x.Name, StringComparison.OrdinalIgnoreCase))
@@ -104,18 +93,28 @@ public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstanc
       return await Task.FromResult(result);
    }
 
+   public async Task BeginBatchUpdateIpAddressAsync()
+   {
+      this.httpClient = new HttpClient();
+
+      await Task.CompletedTask;
+   }
+
+   public async Task EndBatchUpdateIpAddressAsync()
+   {
+      // not actually needed per docs, but doens't hurt
+      this.httpClient.Dispose();
+
+      await Task.CompletedTask;
+   }
 
    // Interface required
    /// <inheritdoc/>
-   public async Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(
+   public async Task<DdnsProviderStatusResult> TryUpdateIpAddressAsync(
       string domainName,
       string ipAddress)
    {
-      var result = new DdnsProviderSuccessResult
-      {
-         IsSuccess = false,
-         Message = string.Empty,
-      };
+      DdnsProviderStatusResult result = DdnsProviderStatusResult.Fail;
 
       CloudflareDomain? domain = this.applicationSettings.Domains
          .Where(x => domainName.Equals(x.Name, StringComparison.OrdinalIgnoreCase))
@@ -131,9 +130,9 @@ public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstanc
       try
       {
          // we need to set these headers
-         client.DefaultRequestHeaders.Clear();
-         client.DefaultRequestHeaders.Add("X-Auth-Email", this.GetSettingsAuthorizationEmail(domain));
-         client.DefaultRequestHeaders.Add("X-Auth-Key", this.GetSettingsAuthorizationKey(domain));
+         this.httpClient.DefaultRequestHeaders.Clear();
+         this.httpClient.DefaultRequestHeaders.Add("X-Auth-Email", this.GetSettingsAuthorizationEmail(domain));
+         this.httpClient.DefaultRequestHeaders.Add("X-Auth-Key", this.GetSettingsAuthorizationKey(domain));
 
          string zoneId = this.GetSettingsZoneId(domain);
          string url = $"https://api.cloudflare.com/client/v4/zones/{zoneId}/dns_records/{domain.RecordId}";
@@ -145,7 +144,7 @@ public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstanc
             content = ipAddress
          }), Encoding.UTF8, "application/json");
 
-         HttpResponseMessage response = await client.PutAsync(url, content);
+         HttpResponseMessage response = await this.httpClient.PutAsync(url, content);
          error = response.IsSuccessStatusCode
                ? string.Empty
                : $"{response.StatusCode}: {response.ReasonPhrase}";
@@ -155,7 +154,7 @@ public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstanc
          error = $"Exception, unable to update IP address for domain {domain.Name}, {ex.Message}";
       }
 
-      return new DdnsProviderSuccessResult
+      return new DdnsProviderStatusResult
       {
          IsSuccess = string.IsNullOrWhiteSpace(error),
          Message = error,
@@ -189,17 +188,17 @@ public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstanc
 
    protected virtual void Dispose(bool disposing)
    {
-      if (!disposedValue)
+      if (!this.disposedValue)
       {
          if (disposing)
          {
             // dispose managed state (managed objects)
-            this.client.Dispose();
+            this.httpClient?.Dispose();
          }
 
          // free unmanaged resources (unmanaged objects) and override finalizer
          // set large fields to null
-         disposedValue = true;
+         this.disposedValue = true;
       }
    }
 

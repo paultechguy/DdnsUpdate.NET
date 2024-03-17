@@ -1,15 +1,8 @@
-﻿// -------------------------------------------------------------------------
-// <copyright file="CommandLineOptions.cs" company="PaulTechGuy">
-// Copyright (c) Paul Carver. All rights reserved.
-// </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
-// -------------------------------------------------------------------------
+﻿// "// <copyright file=\"CommandLineOptions.cs\" company=\"PaulTechGuy\">
+// // Copyright (c) Paul Carver. All rights reserved.
+// // </copyright>"
 
 namespace DdnsUpdate.Core.Models;
-
-using CommandLine;
-
 public class CommandLineOptions
 {
    // See the project website to add command-line options.
