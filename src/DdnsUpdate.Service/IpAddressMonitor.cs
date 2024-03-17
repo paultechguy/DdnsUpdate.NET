@@ -87,39 +87,34 @@ public partial class IpAddressMonitor(
             // while we were executing
             this.RefreshApplicationSettings();
 
-            foreach (var ddnsUpdateProvider in providerPlugins)
+            // get new and last known ip addresses
+            (string ip, UriStatisticItem? statsItem) = await this.GetIpAddressV4Async(cancelToken);
+            string lastIpAddress = this.LoadLastIpAddress();
+
+            if (string.IsNullOrWhiteSpace(ip) || statsItem is null)
+            {
+               this.logger.LogAny(LogLevel.Warning, $"#{loopCounter}: Unable to determine external IP address or cancellation requested");
+               _ = this.SleepBetweenAllIpUpdates(cancelToken);
+
+               continue;
+            }
+            else if (lastIpAddress == ip && !this.appSettings.DdnsSettings.AlwaysUpdateDdnsEvenIfUnchanged)
+            {
+               // ip is he same as last time, and we bypass ddns updates if they are the same
+               this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: IP address {ip} unchanged using {statsItem.Uri}; skip DNS update(s)");
+               _ = this.SleepBetweenAllIpUpdates(cancelToken);
+
+               continue;
+            }
+
+            ////////////////////////////
+            // START: MAIN PLUGIN LOOP
+            //
+            foreach (IDdnsUpdateProvider ddnsUpdateProvider in providerPlugins)
             {
                List<string> updateDomainNames = await ddnsUpdateProvider.GetDomainNamesAsync();
                if (updateDomainNames.Count > 0)
                {
-                  // get new and last known ip addresses
-                  (string ip, UriStatisticItem? statsItem) = await this.GetIpAddressV4Async(cancelToken);
-                  string lastIpAddress = this.LoadLastIpAddress();
-
-                  if (string.IsNullOrWhiteSpace(ip) || statsItem is null)
-                  {
-                     this.logger.LogAny(LogLevel.Warning, $"#{loopCounter}: Unable to determine external IP address or cancellation requested");
-                     _ = this.SleepBetweenAllIpUpdates(cancelToken);
-
-                     continue;
-                  }
-                  else if (lastIpAddress == ip && !this.appSettings.DdnsSettings.AlwaysUpdateDdnsEvenIfUnchanged)
-                  {
-                     // ip is he same as last time, and we bypass ddns updates if they are the same
-                     this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: IP address {ip} unchanged using {statsItem.Uri}; skip {updateDomainNames.Count} DNS update(s)");
-                     _ = this.SleepBetweenAllIpUpdates(cancelToken);
-
-                     continue;
-                  }
-
-                  // remember last ip if it's changed
-                  if (ip != lastIpAddress)
-                  {
-                     this.logger.LogAny(LogLevel.Information, $"New IP address found: {ip}");
-                     await this.SendEmailIpAddressChangedAsync(lastIpAddress, ip, cancelToken); // optional based on config
-                     this.SaveLastIpAddress(ip);
-                  }
-
                   this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Current external IP is {ip} via URL {statsItem.Uri}");
                   this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
 
@@ -130,6 +125,18 @@ public partial class IpAddressMonitor(
                {
                   this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: No enabled domains found; skip DNS update(s)");
                }
+            }
+
+            //
+            // END: MAIN PLUGIN LOOP
+            ////////////////////////////
+
+            // remember last ip if it's changed
+            if (ip != lastIpAddress)
+            {
+               this.logger.LogAny(LogLevel.Information, $"New IP address found: {ip}");
+               await this.SendEmailIpAddressChangedAsync(lastIpAddress, ip, cancelToken); // optional based on config
+               this.SaveLastIpAddress(ip);
             }
 
             // sleep if we're not cancelling
@@ -165,7 +172,7 @@ public partial class IpAddressMonitor(
          this.PluginLogError,
          this.PluginLogCritical);
 
-      DdnsUpdateProviderInstanceContext contextInstance = new DdnsUpdateProviderInstanceContext(this.configuration, loggerContext);
+      var contextInstance = new DdnsUpdateProviderInstanceContext(this.configuration, loggerContext);
 
       // load all plugins from main plugin directory
       string topLevelPluginDirectory = FilePathHelper.ApplicationPluginDirectory;
@@ -177,7 +184,7 @@ public partial class IpAddressMonitor(
    private static void UnloadDdnsUpdateProviderPlugins(IList<IDdnsUpdateProvider> providerPlugins)
    {
       // basically, dispose of plugins
-      foreach (var plugin in providerPlugins)
+      foreach (IDdnsUpdateProvider plugin in providerPlugins)
       {
          plugin.Dispose();
       }
@@ -219,24 +226,30 @@ public partial class IpAddressMonitor(
       string ipAddress,
       CancellationToken cancelToken)
    {
-      var parallelOptions = new ParallelOptions
-      {
-         MaxDegreeOfParallelism = this.appSettings.DdnsSettings.ParallelDdnsUpdateCount < 0
+      int maxDegreeOfParallelism = this.appSettings.DdnsSettings.ParallelDdnsUpdateCount < 0
             ? -1 // unlimited
             : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount == 0
                ? domainNames.Count
-               : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount,
+               : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount;
+
+      var parallelOptions = new ParallelOptions
+      {
+         MaxDegreeOfParallelism = maxDegreeOfParallelism,
       };
 
-      Parallel.ForEach(domainNames, async domainName =>
-      {
-         if (!cancelToken.IsCancellationRequested)
+      // ensure the foreach is completed before continuing
+      var parallelForEachTask = Task.Run(() =>
          {
-            _ = await this.UpdateDomainIpAddressAsync(ddnsUpdateProvider, loopCounter, ipAddress, domainName);
+            Parallel.ForEach(domainNames, parallelOptions, async domainName =>
+            {
+               if (!cancelToken.IsCancellationRequested)
+               {
+                  _ = await this.UpdateDomainIpAddressAsync(ddnsUpdateProvider, loopCounter, ipAddress, domainName);
+               }
+            });
+         }, cancelToken);
 
-            // no need to dispose of client
-         }
-      });
+      await parallelForEachTask;
 
       // now that all updates are done, update stats
       await this.SaveUriStatisticsAsync();
@@ -271,7 +284,7 @@ public partial class IpAddressMonitor(
          ip);
       if (updateResult.IsSuccess)
       {
-         this.logger.LogAny(LogLevel.Information, $"#{counter}: Domain {domainName}, IP updated to {ip}");
+         this.logger.LogAny(LogLevel.Information, $"#{counter}: Domain {domainName}, IP updated to {ip}", ddnsUpdateProvider.ProviderLogName);
       }
       else
       {

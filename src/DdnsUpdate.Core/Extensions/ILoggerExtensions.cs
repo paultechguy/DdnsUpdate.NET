@@ -6,7 +6,6 @@
 // be found at https://www.apache.org/licenses/LICENSE-2.0.
 // -------------------------------------------------------------------------
 
-
 namespace DdnsUpdate.Core.Extensions;
 
 using Microsoft.Extensions.Logging;

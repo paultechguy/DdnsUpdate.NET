@@ -25,6 +25,8 @@ public class DdnsUpdateProvider(DdnsUpdateProviderInstanceContext contextInstanc
    private bool disposedValue;
    private readonly DdnsUpdateProviderInstanceContext contextInstance = contextInstance;
 
+   // Interface required
+   /// <inheritdoc/>
    public string ProviderLogName { get; set; } = "Cloudflare";
 
    // Interface required

@@ -23,6 +23,11 @@ public interface IDdnsUpdateProvider : IDisposable
    string ProviderName { get; set; }
 
    /// <summary>
+   /// The short text name of the DDNS provider that is used for logging.
+   /// </summary>
+   string ProviderLogName { get; set; }
+
+   /// <summary>
    /// Get all the domain names that need a DNS update using the latest IP address.
    /// </summary>
    /// <returns>A <see cref="List"/> of string domain names.</returns>
