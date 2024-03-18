@@ -40,22 +40,87 @@ public class DdnsUpdateProvider(
       return await Task.FromResult(enabledDomains);
    }
 
+   // Interface required
    /// <inheritdoc/>
-   public async Task<DdnsProviderStatusResult> IsDomainValidAsync(string domainName)
+   public async Task BeginBatchUpdateIpAddressAsync()
    {
-      // make sure we have all the proper settings; if a domain setting is missing, we just have a default instead
+      this.httpClient = new HttpClient();
 
-      DdnsProviderStatusResult result = DdnsProviderStatusResult.Fail;
+      await Task.CompletedTask;
+   }
 
+   // Interface required
+   /// <inheritdoc/>
+   public async Task EndBatchUpdateIpAddressAsync()
+   {
+      // not actually needed per docs, but doens't hurt
+      this.httpClient.Dispose();
+
+      await Task.CompletedTask;
+   }
+
+   // Interface required
+   /// <inheritdoc/>
+   public async Task<DdnsProviderStatusResult> TryUpdateIpAddressAsync(
+      string domainName,
+      string ipAddress)
+   {
       CloudflareDomain? domain = this.applicationSettings.Domains
          .Where(x => domainName.Equals(x.Name, StringComparison.OrdinalIgnoreCase))
          .FirstOrDefault();
       if (domain is null)
       {
-         result.Message = $"Domain {domainName} does not exist";
+         DdnsProviderStatusResult invaliResult = DdnsProviderStatusResult.Fail;
+         invaliResult.Message = $"Domain {domainName} does not exist";
 
-         return await Task.FromResult(result);
+         return await Task.FromResult(invaliResult);
       }
+
+      // make sure all the configuration/settings for this domain are valid
+      if (!this.IsDomainValidAsync(domain, out DdnsProviderStatusResult result))
+      {
+         return result;
+      }
+
+      string error;
+      try
+      {
+         // we need to set these headers
+         this.httpClient.DefaultRequestHeaders.Clear();
+         this.httpClient.DefaultRequestHeaders.Add("X-Auth-Email", this.GetSettingsAuthorizationEmail(domain));
+         this.httpClient.DefaultRequestHeaders.Add("X-Auth-Key", this.GetSettingsAuthorizationKey(domain));
+
+         string zoneId = this.GetSettingsZoneId(domain);
+         string url = $"https://api.cloudflare.com/client/v4/zones/{zoneId}/dns_records/{domain.RecordId}";
+
+         var content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new
+         {
+            type = this.GetSettingsRecordType(domain),
+            name = domain.Name,
+            content = ipAddress
+         }), Encoding.UTF8, "application/json");
+
+         HttpResponseMessage response = await this.httpClient.PutAsync(url, content);
+         error = response.IsSuccessStatusCode
+               ? string.Empty
+               : $"{response.StatusCode}: {response.ReasonPhrase}";
+      }
+      catch (Exception ex)
+      {
+         error = $"Exception, unable to update IP address for domain {domain.Name}, {ex.Message}";
+      }
+
+      result.IsSuccess = string.IsNullOrWhiteSpace(error);
+      result.Message = error;
+
+      return result;
+   }
+
+   private bool IsDomainValidAsync(CloudflareDomain domain, out DdnsProviderStatusResult result)
+   {
+      // make sure we have all the proper settings; if a domain setting is missing, we just have a default instead
+
+      result = DdnsProviderStatusResult.Fail;
 
       var errorList = new List<string>();
 
@@ -90,75 +155,7 @@ public class DdnsUpdateProvider(
       result.IsSuccess = errorList.Count == 0;
       result.Message = result.IsSuccess ? string.Empty : string.Join(", ", errorList);
 
-      return await Task.FromResult(result);
-   }
-
-   public async Task BeginBatchUpdateIpAddressAsync()
-   {
-      this.httpClient = new HttpClient();
-
-      await Task.CompletedTask;
-   }
-
-   public async Task EndBatchUpdateIpAddressAsync()
-   {
-      // not actually needed per docs, but doens't hurt
-      this.httpClient.Dispose();
-
-      await Task.CompletedTask;
-   }
-
-   // Interface required
-   /// <inheritdoc/>
-   public async Task<DdnsProviderStatusResult> TryUpdateIpAddressAsync(
-      string domainName,
-      string ipAddress)
-   {
-      DdnsProviderStatusResult result = DdnsProviderStatusResult.Fail;
-
-      CloudflareDomain? domain = this.applicationSettings.Domains
-         .Where(x => domainName.Equals(x.Name, StringComparison.OrdinalIgnoreCase))
-         .FirstOrDefault();
-      if (domain is null)
-      {
-         result.Message = $"Domain {domainName} does not exist";
-
-         return await Task.FromResult(result);
-      }
-
-      string error;
-      try
-      {
-         // we need to set these headers
-         this.httpClient.DefaultRequestHeaders.Clear();
-         this.httpClient.DefaultRequestHeaders.Add("X-Auth-Email", this.GetSettingsAuthorizationEmail(domain));
-         this.httpClient.DefaultRequestHeaders.Add("X-Auth-Key", this.GetSettingsAuthorizationKey(domain));
-
-         string zoneId = this.GetSettingsZoneId(domain);
-         string url = $"https://api.cloudflare.com/client/v4/zones/{zoneId}/dns_records/{domain.RecordId}";
-
-         var content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new
-         {
-            type = this.GetSettingsRecordType(domain),
-            name = domain.Name,
-            content = ipAddress
-         }), Encoding.UTF8, "application/json");
-
-         HttpResponseMessage response = await this.httpClient.PutAsync(url, content);
-         error = response.IsSuccessStatusCode
-               ? string.Empty
-               : $"{response.StatusCode}: {response.ReasonPhrase}";
-      }
-      catch (Exception ex)
-      {
-         error = $"Exception, unable to update IP address for domain {domain.Name}, {ex.Message}";
-      }
-
-      return new DdnsProviderStatusResult
-      {
-         IsSuccess = string.IsNullOrWhiteSpace(error),
-         Message = error,
-      };
+      return result.IsSuccess;
    }
 
    private void RefreshApplicationSettings()

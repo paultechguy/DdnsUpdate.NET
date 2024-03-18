@@ -27,17 +27,15 @@ public class DdnsUpdateProvider(
       return await Task.FromResult(new List<string>());
    }
 
+   // Interface required
    /// <inheritdoc/>
-   public async Task<DdnsProviderStatusResult> IsDomainValidAsync(string domainName)
-   {
-      return await Task.FromResult(DdnsProviderStatusResult.Success);
-   }
-
    public async Task BeginBatchUpdateIpAddressAsync()
    {
       await Task.CompletedTask;
    }
 
+   // Interface required
+   /// <inheritdoc/>
    public async Task EndBatchUpdateIpAddressAsync()
    {
       await Task.CompletedTask;

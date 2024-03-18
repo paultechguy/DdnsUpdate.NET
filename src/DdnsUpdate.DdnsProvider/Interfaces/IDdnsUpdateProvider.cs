@@ -14,8 +14,8 @@ using DdnsUpdate.DdnsProvider.Models;
 public interface IDdnsUpdateProvider : IDisposable
 {
    /// <summary>
-   /// The short, unique, text name of the DDNS provider that provides IP address updates. Used
-   /// for logging purposes.
+   /// The short, unique, text name of the DDNS provider that provides IP address updates.  This is used
+   /// in log output.
    /// </summary>
    string ProviderName { get; set; }
 
@@ -26,16 +26,17 @@ public interface IDdnsUpdateProvider : IDisposable
    Task<List<string>> GetDomainNamesAsync();
 
    /// <summary>
-   /// Determines if the domain referred to by domainName, is valid for just prior
-   /// IP address to be updated.  This method can perform any internal configuration for
-   /// the domain.  This method is called prior to
-   /// <see cref="TryUpdateIpAddressAsync(HttpClient, string, string)"/> for each domain
-   /// to be updated.
+   /// This method is called before updating a batch of IP addresses, after waking up.
    /// </summary>
-   /// <param name="domainName">The domain name to validate.</param>
-   /// <returns><see cref="DdnsProviderStatusResult"/>.</returns>
-   Task<DdnsProviderStatusResult> IsDomainValidAsync(string domainName);
+   /// <returns><see cref="Task"/>.</returns>
+   Task BeginBatchUpdateIpAddressAsync();
 
+   /// <summary>
+   /// This method is called after updating a batch of IP addresses, after waking up.
+   /// <see cref="TryUpdateIpAddressAsync"/>.
+   /// </summary>
+   /// <returns></returns>
+   Task EndBatchUpdateIpAddressAsync();
    /// <summary>
    /// Using the client, update the DNS for domainName with the specified ipAddress.
    /// </summary>
@@ -45,18 +46,4 @@ public interface IDdnsUpdateProvider : IDisposable
    Task<DdnsProviderStatusResult> TryUpdateIpAddressAsync(
       string domainName,
       string ipAddress);
-
-   /// <summary>
-   /// This method is called before updating a batch of IP addresses, after waking up.
-   /// <see cref="TryUpdateIpAddressAsync"/>.
-   /// </summary>
-   /// <returns></returns>
-   Task BeginBatchUpdateIpAddressAsync();
-
-   /// <summary>
-   /// This method is called after updating a batch of IP addresses, after waking up.
-   /// <see cref="TryUpdateIpAddressAsync"/>.
-   /// </summary>
-   /// <returns></returns>
-   Task EndBatchUpdateIpAddressAsync();
 }
