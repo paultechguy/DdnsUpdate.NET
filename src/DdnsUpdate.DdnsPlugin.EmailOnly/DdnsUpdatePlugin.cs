@@ -11,10 +11,10 @@ using DdnsUpdate.DdnsPlugin.Interfaces;
 using DdnsUpdate.DdnsPlugin.Models;
 
 public class DdnsUpdatePlugin(
-   DdnsUpdatePluginInstanceContext contextInstance) : IDdnsUpdatePlugin
+   DdnsUpdatePluginContext context) : IDdnsUpdatePlugin
 {
    private bool disposedValue;
-   private readonly DdnsUpdatePluginInstanceContext contextInstance = contextInstance;
+   private readonly DdnsUpdatePluginContext context = context;
 
    // Interface required
    /// <inheritdoc/>

@@ -19,7 +19,6 @@ public interface IPluginManager
    string[] PluginNames { get; }
 
    int AddPlugins(
-      IConfiguration configuration,
       LoggerContext loggerContext,
       string directoryPath,
       bool recursive);

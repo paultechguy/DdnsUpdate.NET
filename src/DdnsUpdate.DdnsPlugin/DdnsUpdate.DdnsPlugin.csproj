@@ -11,4 +11,8 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\DdnsUpdate.Email.Core\DdnsUpdate.Email.Core.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -14,6 +14,7 @@ using DdnsUpdate.DdnsPlugin;
 using DdnsUpdate.DdnsPlugin.Helpers;
 using DdnsUpdate.DdnsPlugin.Interfaces;
 using DdnsUpdate.DdnsPlugin.Models;
+using DdnsUpdate.Email.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -170,7 +171,7 @@ public partial class IpAddressMonitor(
 
       // load all plugins from main plugin directory
       string topLevelPluginDirectory = FilePathHelper.ApplicationPluginDirectory;
-      this.pluginManager.AddPlugins(this.configuration, loggerContext, topLevelPluginDirectory, recursive: true);
+      this.pluginManager.AddPlugins(loggerContext, topLevelPluginDirectory, recursive: true);
 
       foreach (IDdnsUpdatePlugin plugin in this.pluginManager.Plugins)
       {

@@ -1,19 +1,32 @@
-﻿// <copyright file="DdnsUpdatePluginInstanceContext.cs" company="PaulTechGuy"
+﻿// <copyright file="DdnsUpdatePluginContext.cs" company="PaulTechGuy"
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>"
-
 
 namespace DdnsUpdate.DdnsPlugin;
 
 using DdnsUpdate.DdnsPlugin.Interfaces;
+using DdnsUpdate.Email.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
 
-public class DdnsUpdatePluginInstanceContext(
+public class DdnsUpdatePluginContext(
    SettingsContext settings,
+   EmailContext emailContext,
    LoggerContext loggerContext)
 {
    public readonly SettingsContext Settings = settings;
+   public readonly EmailContext Email = emailContext;
    public readonly LoggerContext Logger = loggerContext;
+
+}
+
+public class EmailContext(
+   IEmailSender emailSender)
+{
+   /// <summary>
+   /// An general email sender. Wrap calls to send email in try/catch to avoid
+   /// a plugin failing.
+   /// </summary>
+   public readonly IEmailSender EmailSender = emailSender;
 }
 
 public class LoggerContext(
@@ -33,9 +46,26 @@ public class SettingsContext(
 {
    private readonly IConfiguration configuration = configuration;
 
-   public T? GetSettingsOrNull<T>(IDdnsUpdatePlugin plugin)
+   /// <summary>
+   /// Gets the plugin settings from the appSettings file.  See the README.ms file for details.
+   /// </summary>
+   /// <typeparam name="T">The class type for the plugin settings.</typeparam>
+   /// <param name="plugin"><see cref="IDdnsUpdatePlugin"/>.</param>
+   /// <returns></returns>
+   public T? GetPluginSettingsOrNull<T>(IDdnsUpdatePlugin plugin)
       where T : class, new()
    {
+      // the plugin settings should be configured in the appSettings like:
+      //   "plugins": [
+      //       {
+      //          "name": {pluginName},
+      //          "settings" {
+      //             {properties for type T}
+      //          }
+      //       }
+      //       ...{more plugins}
+      //   ]
+
       // get the main "plugins" section and check children for "name" equal to the plugin name
       IConfigurationSection? pluginSection = this.configuration.GetSection("plugins");
       IEnumerable<IConfigurationSection> plugins = pluginSection.GetChildren();

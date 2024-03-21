@@ -14,12 +14,12 @@ using DdnsUpdate.DdnsPlugin.Interfaces;
 using DdnsUpdate.DdnsPlugin.Models;
 
 public class DdnsUpdatePlugin(
-   DdnsUpdatePluginInstanceContext contextInstance) : IDdnsUpdatePlugin
+   DdnsUpdatePluginContext context) : IDdnsUpdatePlugin
 {
    private CloudflareSettings applicationSettings = new();
    private HttpClient httpClient = null!;
    private bool disposedValue;
-   private readonly DdnsUpdatePluginInstanceContext contextInstance = contextInstance;
+   private readonly DdnsUpdatePluginContext context = context;
 
    // Interface required
    /// <inheritdoc/>
@@ -44,7 +44,7 @@ public class DdnsUpdatePlugin(
       {
          // hum...not good so we'll just log the issue and pretend we don't have
          // any domains to update
-         this.contextInstance.Logger.LogError(this, "Unable to refresh application settings");
+         this.context.Logger.LogError(this, "Unable to refresh application settings");
          return [];
       }
    }
@@ -169,7 +169,7 @@ public class DdnsUpdatePlugin(
 
    private void RefreshApplicationSettings()
    {
-      CloudflareSettings? cloudflareJsonSettings = this.contextInstance.Settings.GetSettingsOrNull<CloudflareSettings>(this)
+      CloudflareSettings? cloudflareJsonSettings = this.context.Settings.GetPluginSettingsOrNull<CloudflareSettings>(this)
          ?? throw new InvalidOperationException($"Missing application configuraiton for plugin: {this.PluginName}");
 
       this.applicationSettings = cloudflareJsonSettings;

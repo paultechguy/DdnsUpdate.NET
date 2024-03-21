@@ -2,7 +2,7 @@
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>"
 
-namespace DdnsUpdate.Core.Interfaces;
+namespace DdnsUpdate.Email.Core.Interfaces;
 
 using System.Threading.Tasks;
 

@@ -7,8 +7,8 @@ namespace DdnsUpdate.Email;
 using System.Net;
 using System.Net.Mail;
 using System.Text;
-using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
+using DdnsUpdate.Email.Core.Interfaces;
 using Microsoft.Extensions.Options;
 
 public class EmailSender(

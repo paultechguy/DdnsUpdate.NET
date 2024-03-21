@@ -13,10 +13,14 @@ using System.Text.RegularExpressions;
 using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.DdnsPlugin;
 using DdnsUpdate.DdnsPlugin.Interfaces;
+using DdnsUpdate.Email.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
 
-public class PluginManager : IPluginManager
+public class PluginManager(
+   IConfiguration configuration,
+   IEmailSender emailSender) : IPluginManager
 {
+   private readonly IConfiguration configuration = configuration;
    private readonly List<IDdnsUpdatePlugin> plugins = [];
    private readonly Regex regexValidPluginName = new(@"^[\w\-\.]+$");
 
@@ -34,7 +38,6 @@ public class PluginManager : IPluginManager
       .ToArray();
 
    public int AddPlugins(
-      IConfiguration configuration,
       LoggerContext loggerContext,
       string directoryPath,
       bool recursive)
@@ -61,14 +64,17 @@ public class PluginManager : IPluginManager
                {
                   // does this implementation have the correct ctor parameter
                   bool hasConstructorWithCorrectType = type.GetConstructors()
-                     .Any(ctor => ctor.GetParameters().Any(param => param.ParameterType == typeof(DdnsUpdatePluginInstanceContext)));
+                     .Any(ctor => ctor.GetParameters().Any(param => param.ParameterType == typeof(DdnsUpdatePluginContext)));
                   if (!hasConstructorWithCorrectType)
                   {
-                     throw new InvalidOperationException($"Plugin does not have ctor with {nameof(DdnsUpdatePluginInstanceContext)} type; {pluginPath}");
+                     throw new InvalidOperationException($"Plugin does not have ctor with {nameof(DdnsUpdatePluginContext)} type; {pluginPath}");
                   }
 
                   // create a context for this plugin
-                  var context = new DdnsUpdatePluginInstanceContext(new SettingsContext(configuration), loggerContext);
+                  var context = new DdnsUpdatePluginContext(
+                     new SettingsContext(this.configuration),
+                     new EmailContext(emailSender),
+                     loggerContext);
 
                   // create plugin instance with a ctor having the context parameter
                   var plugin = (IDdnsUpdatePlugin)Activator.CreateInstance(type, context)!;

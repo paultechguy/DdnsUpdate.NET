@@ -9,6 +9,7 @@ using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
 using DdnsUpdate.DdnsPlugin.Helpers;
 using DdnsUpdate.Email;
+using DdnsUpdate.Email.Core.Interfaces;
 using DdnsUpdate.Service;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,7 +71,7 @@ public partial class Program
       _ = services.AddTransient<IPluginManager, PluginManager>();
       _ = services.AddTransient<IEmailSender, EmailSender>();
       _ = services.AddSingleton(this.commandLineOptions);
-      _ = services.AddHostedService<DdnsUpdateBackgroundService>();
+      _ = services.AddHostedService<Service.BackgroundService>();
 
       // disable the default aspnet status messages that appear in console/log about startup
       _ = services.Configure<ConsoleLifetimeOptions>(options => options.SuppressStatusMessages = true);
