@@ -1,4 +1,4 @@
-﻿// "// <copyright file=\"EmailSender.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="EmailSender.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 

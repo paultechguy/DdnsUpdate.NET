@@ -1,12 +1,12 @@
-﻿// "// <copyright file=\"CloudflareDefaultDomain.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="CloudflareDefaultDomain.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
-namespace DdnsUpdate.DdnsProvider.Cloudflare.Models;
+namespace DdnsUpdate.DdnsPlugin.Cloudflare.Models;
 
 /// <summary>
 /// A class representing a default domain configuration to be used with a DDNS
-/// provider.  Values from this class are used when a instance of a
+/// plugin.  Values from this class are used when a instance of a
 /// <see cref="CloudflareDomain"/> object has missing properties.
 /// </summary>
 public class CloudflareDefaultDomain

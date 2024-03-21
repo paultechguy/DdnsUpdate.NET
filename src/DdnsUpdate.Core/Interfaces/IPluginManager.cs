@@ -1,21 +1,26 @@
-﻿// "// <copyright file=\"IPluginManager.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="IPluginManager.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
 namespace DdnsUpdate.Core.Interfaces;
 
-using DdnsUpdate.DdnsProvider;
-using DdnsUpdate.DdnsProvider.Interfaces;
+using DdnsUpdate.DdnsPlugin;
+using DdnsUpdate.DdnsPlugin.Interfaces;
+using Microsoft.Extensions.Configuration;
 
 public interface IPluginManager
 {
-   void ClearProviders();
+   void ClearPlugins();
 
-   IList<IDdnsUpdateProvider> Providers { get; }
+   IList<IDdnsUpdatePlugin> Plugins { get; }
 
-   int ProviderCount { get; }
+   int PluginCount { get; }
 
-   string[] ProviderNames { get; }
+   string[] PluginNames { get; }
 
-   int AddProviders(DdnsUpdateProviderInstanceContext context, string directoryPath, bool recursive);
+   int AddPlugins(
+      IConfiguration configuration,
+      LoggerContext loggerContext,
+      string directoryPath,
+      bool recursive);
 }

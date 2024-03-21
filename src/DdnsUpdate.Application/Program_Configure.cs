@@ -1,4 +1,4 @@
-﻿// "// <copyright file=\"Program_Configure.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="Program_Configure.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
@@ -7,7 +7,7 @@ namespace DdnsUpdate.Application;
 using System;
 using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
-using DdnsUpdate.DdnsProvider.Helpers;
+using DdnsUpdate.DdnsPlugin.Helpers;
 using DdnsUpdate.Email;
 using DdnsUpdate.Service;
 using Microsoft.Extensions.Configuration;

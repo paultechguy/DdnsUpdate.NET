@@ -1,4 +1,4 @@
-﻿// "// <copyright file=\"DdnsUpdateBackgroundService.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="DdnsUpdateBackgroundService.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 

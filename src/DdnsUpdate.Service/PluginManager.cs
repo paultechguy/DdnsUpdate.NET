@@ -1,4 +1,4 @@
-﻿// "// <copyright file=\"PluginManager.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="PluginManager.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
@@ -9,28 +9,35 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
+using System.Text.RegularExpressions;
 using DdnsUpdate.Core.Interfaces;
-using DdnsUpdate.DdnsProvider;
-using DdnsUpdate.DdnsProvider.Interfaces;
+using DdnsUpdate.DdnsPlugin;
+using DdnsUpdate.DdnsPlugin.Interfaces;
+using Microsoft.Extensions.Configuration;
 
 public class PluginManager : IPluginManager
 {
-   private readonly List<IDdnsUpdateProvider> providers = [];
+   private readonly List<IDdnsUpdatePlugin> plugins = [];
+   private readonly Regex regexValidPluginName = new(@"^[\w\-\.]+$");
 
-   public IList<IDdnsUpdateProvider> Providers => this.providers.AsReadOnly();
+   public IList<IDdnsUpdatePlugin> Plugins => this.plugins.AsReadOnly();
 
-   public void ClearProviders()
+   public void ClearPlugins()
    {
-      this.providers.Clear();
+      this.plugins.Clear();
    }
 
-   public int ProviderCount => this.providers.Count;
+   public int PluginCount => this.plugins.Count;
 
-   public string[] ProviderNames => this.providers
-      .Select(x => x.ProviderName)
+   public string[] PluginNames => this.plugins
+      .Select(x => x.PluginName)
       .ToArray();
 
-   public int AddProviders(DdnsUpdateProviderInstanceContext context, string directoryPath, bool recursive)
+   public int AddPlugins(
+      IConfiguration configuration,
+      LoggerContext loggerContext,
+      string directoryPath,
+      bool recursive)
    {
       int addedCount = 0;
       foreach (string pluginPath in Directory.GetFiles(
@@ -43,29 +50,42 @@ public class PluginManager : IPluginManager
             Assembly pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(pluginPath);
 
             // is this plugin disabled by using # prefix
-            if (Path.GetFileName(Path.GetDirectoryName(pluginPath)!).StartsWith("#"))
+            if (Path.GetFileName(Path.GetDirectoryName(pluginPath)!).TrimStart().StartsWith('#'))
             {
                continue; // skip this plugin directory
             }
 
             foreach (Type type in pluginAssembly.GetExportedTypes())
             {
-               if (typeof(IDdnsUpdateProvider).IsAssignableFrom(type) && type != typeof(IDdnsUpdateProvider))
+               if (typeof(IDdnsUpdatePlugin).IsAssignableFrom(type) && type != typeof(IDdnsUpdatePlugin))
                {
                   // does this implementation have the correct ctor parameter
                   bool hasConstructorWithCorrectType = type.GetConstructors()
-                     .Any(ctor => ctor.GetParameters().Any(param => param.ParameterType == typeof(DdnsUpdateProviderInstanceContext)));
+                     .Any(ctor => ctor.GetParameters().Any(param => param.ParameterType == typeof(DdnsUpdatePluginInstanceContext)));
                   if (!hasConstructorWithCorrectType)
                   {
-                     throw new InvalidOperationException($"Plugin does not have ctor with {nameof(DdnsUpdateProviderInstanceContext)} type; {pluginPath}");
+                     throw new InvalidOperationException($"Plugin does not have ctor with {nameof(DdnsUpdatePluginInstanceContext)} type; {pluginPath}");
                   }
 
+                  // create a context for this plugin
+                  var context = new DdnsUpdatePluginInstanceContext(new SettingsContext(configuration), loggerContext);
+
                   // create plugin instance with a ctor having the context parameter
-                  var plugin = (IDdnsUpdateProvider)Activator.CreateInstance(type, context)!;
+                  var plugin = (IDdnsUpdatePlugin)Activator.CreateInstance(type, context)!;
                   if (plugin is not null)
                   {
-                     plugin.ProviderName = this.AdjustPluginName(plugin.ProviderName);
-                     this.providers.Add(plugin);
+                     if (this.plugins.Any(x => x.PluginName == plugin.PluginName))
+                     {
+                        throw new InvalidOperationException($"Duplicate {nameof(plugin.PluginName)} found: {plugin.PluginName}");
+                     }
+
+                     if (!this.IsPluginConfigurationValid(plugin, out IList<string> errors))
+                     {
+                        throw new InvalidOperationException($"Plugin failed validation: {string.Join("; ", errors)}");
+                     }
+
+                     // finally..add this pup
+                     this.plugins.Add(plugin);
 
                      ++addedCount;
                   }
@@ -81,15 +101,18 @@ public class PluginManager : IPluginManager
       return addedCount;
    }
 
-   private string AdjustPluginName(string pluginName)
+   private bool IsPluginConfigurationValid(IDdnsUpdatePlugin plugin, out IList<string> errors)
    {
-      // make sure this pluginName is unique from any existing ones
-      int index = 0;
-      while (this.providers.Where(x => x.ProviderName.Equals(pluginName, StringComparison.OrdinalIgnoreCase)).Any())
+      errors = new List<string>();
+      do
       {
-         pluginName = $"{pluginName}_{index}";
+         if (!this.regexValidPluginName.IsMatch(plugin.PluginName))
+         {
+            errors.Add($"Invalid character(s) in {nameof(plugin.PluginName)}");
+         }
       }
+      while (false);
 
-      return pluginName;
+      return errors.Count == 0;
    }
 }

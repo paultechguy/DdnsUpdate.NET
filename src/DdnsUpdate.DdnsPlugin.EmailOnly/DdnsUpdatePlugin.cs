@@ -1,24 +1,24 @@
-﻿// "// <copyright file=\"DdnsUpdateProvider.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="DdnsUpdatePlugin.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
-namespace DdnsUpdate.DdnsProvider.EmailOnly;
+namespace DdnsUpdate.DdnsPlugin.EmailOnly;
 
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using DdnsUpdate.DdnsProvider.Interfaces;
-using DdnsUpdate.DdnsProvider.Models;
+using DdnsUpdate.DdnsPlugin.Interfaces;
+using DdnsUpdate.DdnsPlugin.Models;
 
-public class DdnsUpdateProvider(
-   DdnsUpdateProviderInstanceContext contextInstance) : IDdnsUpdateProvider
+public class DdnsUpdatePlugin(
+   DdnsUpdatePluginInstanceContext contextInstance) : IDdnsUpdatePlugin
 {
    private bool disposedValue;
-   private readonly DdnsUpdateProviderInstanceContext contextInstance = contextInstance;
+   private readonly DdnsUpdatePluginInstanceContext contextInstance = contextInstance;
 
    // Interface required
    /// <inheritdoc/>
-   public string ProviderName { get; set; } = "PaulTechGuy.EmailOnly";
+   public string PluginName { get; set; } = "PaulTechGuy.EmailOnly";
 
    // Interface required
    /// <inheritdoc/>
@@ -43,11 +43,11 @@ public class DdnsUpdateProvider(
 
    // Interface required
    /// <inheritdoc/>
-   public async Task<DdnsProviderStatusResult> TryUpdateIpAddressAsync(
+   public async Task<DdnsPluginStatusResult> TryUpdateIpAddressAsync(
       string domainName,
       string ipAddress)
    {
-      return await Task.FromResult(DdnsProviderStatusResult.Success);
+      return await Task.FromResult(DdnsPluginStatusResult.Success);
    }
 
    protected virtual void Dispose(bool disposing)
@@ -66,7 +66,7 @@ public class DdnsUpdateProvider(
    }
 
    // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
-   // ~DdnsUpdateProvider()
+   // ~DdnsUpdatePlugin()
    // {
    //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
    //     Dispose(disposing: false);

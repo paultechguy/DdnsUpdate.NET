@@ -1,43 +1,52 @@
-﻿// "// <copyright file=\"DdnsUpdateProvider.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="DdnsUpdatePlugin.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
-namespace DdnsUpdate.DdnsProvider.Cloudflare;
+namespace DdnsUpdate.DdnsPlugin.Cloudflare;
 
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using DdnsUpdate.DdnsProvider.Cloudflare.Models;
-using DdnsUpdate.DdnsProvider.Interfaces;
-using DdnsUpdate.DdnsProvider.Models;
-using Microsoft.Extensions.Configuration;
+using DdnsUpdate.DdnsPlugin.Cloudflare.Models;
+using DdnsUpdate.DdnsPlugin.Interfaces;
+using DdnsUpdate.DdnsPlugin.Models;
 
-public class DdnsUpdateProvider(
-   DdnsUpdateProviderInstanceContext contextInstance) : IDdnsUpdateProvider
+public class DdnsUpdatePlugin(
+   DdnsUpdatePluginInstanceContext contextInstance) : IDdnsUpdatePlugin
 {
    private CloudflareSettings applicationSettings = new();
    private HttpClient httpClient = null!;
    private bool disposedValue;
-   private readonly DdnsUpdateProviderInstanceContext contextInstance = contextInstance;
+   private readonly DdnsUpdatePluginInstanceContext contextInstance = contextInstance;
 
    // Interface required
    /// <inheritdoc/>
-   public string ProviderName { get; set; } = "PaulTechGuy.Cloudflare";
+   public string PluginName { get; set; } = "PaulTechGuy.Cloudflare";
 
    // Interface required
    /// <inheritdoc/>
    public async Task<List<string>> GetDomainNamesAsync()
    {
-      this.RefreshApplicationSettings();
+      try
+      {
+         this.RefreshApplicationSettings();
 
-      var enabledDomains = this.applicationSettings.Domains
-         .Where(x => x.IsEnabled)
-         .Select(x => x.Name)
-         .ToList();
+         var enabledDomains = this.applicationSettings.Domains
+            .Where(x => x.IsEnabled)
+            .Select(x => x.Name)
+            .ToList();
 
-      return await Task.FromResult(enabledDomains);
+         return await Task.FromResult(enabledDomains);
+      }
+      catch (Exception)
+      {
+         // hum...not good so we'll just log the issue and pretend we don't have
+         // any domains to update
+         this.contextInstance.Logger.LogError(this, "Unable to refresh application settings");
+         return [];
+      }
    }
 
    // Interface required
@@ -61,7 +70,7 @@ public class DdnsUpdateProvider(
 
    // Interface required
    /// <inheritdoc/>
-   public async Task<DdnsProviderStatusResult> TryUpdateIpAddressAsync(
+   public async Task<DdnsPluginStatusResult> TryUpdateIpAddressAsync(
       string domainName,
       string ipAddress)
    {
@@ -70,14 +79,14 @@ public class DdnsUpdateProvider(
          .FirstOrDefault();
       if (domain is null)
       {
-         DdnsProviderStatusResult invaliResult = DdnsProviderStatusResult.Fail;
+         DdnsPluginStatusResult invaliResult = DdnsPluginStatusResult.Fail;
          invaliResult.Message = $"Domain {domainName} does not exist";
 
          return await Task.FromResult(invaliResult);
       }
 
       // make sure all the configuration/settings for this domain are valid
-      if (!this.IsDomainValidAsync(domain, out DdnsProviderStatusResult result))
+      if (!this.IsDomainValidAsync(domain, out DdnsPluginStatusResult result))
       {
          return result;
       }
@@ -116,11 +125,11 @@ public class DdnsUpdateProvider(
       return result;
    }
 
-   private bool IsDomainValidAsync(CloudflareDomain domain, out DdnsProviderStatusResult result)
+   private bool IsDomainValidAsync(CloudflareDomain domain, out DdnsPluginStatusResult result)
    {
       // make sure we have all the proper settings; if a domain setting is missing, we just have a default instead
 
-      result = DdnsProviderStatusResult.Fail;
+      result = DdnsPluginStatusResult.Fail;
 
       var errorList = new List<string>();
 
@@ -160,7 +169,10 @@ public class DdnsUpdateProvider(
 
    private void RefreshApplicationSettings()
    {
-      this.applicationSettings = this.contextInstance.Configuration.GetSection("cloudflareSettings").Get<CloudflareSettings>() ?? throw new InvalidOperationException();
+      CloudflareSettings? cloudflareJsonSettings = this.contextInstance.Settings.GetSettingsOrNull<CloudflareSettings>(this)
+         ?? throw new InvalidOperationException($"Missing application configuraiton for plugin: {this.PluginName}");
+
+      this.applicationSettings = cloudflareJsonSettings;
    }
 
    private string GetSettingsAuthorizationEmail(CloudflareDomain domain)
@@ -200,7 +212,7 @@ public class DdnsUpdateProvider(
    }
 
    // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
-   // ~DdnsUpdateProvider()
+   // ~DdnsUpdatePlugin()
    // {
    //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
    //     Dispose(disposing: false);

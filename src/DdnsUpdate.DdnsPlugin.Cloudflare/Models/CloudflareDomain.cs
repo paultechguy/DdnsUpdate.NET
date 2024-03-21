@@ -1,12 +1,12 @@
-﻿// "// <copyright file=\"CloudflareDomain.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="CloudflareDomain.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
-namespace DdnsUpdate.DdnsProvider.Cloudflare.Models;
+namespace DdnsUpdate.DdnsPlugin.Cloudflare.Models;
 
 /// <summary>
 /// A class representing a domain configuration to be used with a DDNS
-/// provider.
+/// plugin.
 /// </summary>
 public class CloudflareDomain
 {

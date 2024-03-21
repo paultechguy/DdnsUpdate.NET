@@ -1,23 +1,23 @@
-﻿// "// <copyright file=\"IDdnsUpdateProvider.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="IDdnsUpdatePlugin.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
-namespace DdnsUpdate.DdnsProvider.Interfaces;
+namespace DdnsUpdate.DdnsPlugin.Interfaces;
 
 using System.Threading.Tasks;
-using DdnsUpdate.DdnsProvider.Models;
+using DdnsUpdate.DdnsPlugin.Models;
 
 /// <summary>
 /// An interface representing the contract for a DDNS provided that updates domain
 /// DNS records.
 /// </summary>
-public interface IDdnsUpdateProvider : IDisposable
+public interface IDdnsUpdatePlugin : IDisposable
 {
    /// <summary>
-   /// The short, unique, text name of the DDNS provider that provides IP address updates.  This is used
+   /// The short, unique, text name of the DDNS plugin that provides IP address updates.  This is used
    /// in log output.
    /// </summary>
-   string ProviderName { get; set; }
+   string PluginName { get; set; }
 
    /// <summary>
    /// Get all the domain names that need a DNS update using the latest IP address.
@@ -42,8 +42,8 @@ public interface IDdnsUpdateProvider : IDisposable
    /// </summary>
    /// <param name="domainName">The domain name to have a DNS updated (e.g. mycompany.com).</param>
    /// <param name="ipAddress">The IP address to use for a DNS update.</param>
-   /// <returns><see cref="DdnsProviderStatusResult"/>.</returns>
-   Task<DdnsProviderStatusResult> TryUpdateIpAddressAsync(
+   /// <returns><see cref="DdnsPluginStatusResult"/>.</returns>
+   Task<DdnsPluginStatusResult> TryUpdateIpAddressAsync(
       string domainName,
       string ipAddress);
 }

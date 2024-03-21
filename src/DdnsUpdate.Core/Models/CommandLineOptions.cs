@@ -1,4 +1,4 @@
-﻿// "// <copyright file=\"CommandLineOptions.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="CommandLineOptions.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 

@@ -1,4 +1,4 @@
-﻿// "// <copyright file=\"EmailSmtpSettings.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="EmailSmtpSettings.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 

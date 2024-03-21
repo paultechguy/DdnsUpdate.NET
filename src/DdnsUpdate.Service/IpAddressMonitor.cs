@@ -1,21 +1,19 @@
-﻿// "// <copyright file=\"IpAddressMonitor.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="IpAddressMonitor.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
 namespace DdnsUpdate.Service;
 
 using System.Collections.Generic;
-using System.Diagnostics.Metrics;
 using System.Net;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using DdnsUpdate.Core.Extensions;
 using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
-using DdnsUpdate.DdnsProvider;
-using DdnsUpdate.DdnsProvider.Helpers;
-using DdnsUpdate.DdnsProvider.Interfaces;
-using DdnsUpdate.DdnsProvider.Models;
+using DdnsUpdate.DdnsPlugin;
+using DdnsUpdate.DdnsPlugin.Helpers;
+using DdnsUpdate.DdnsPlugin.Interfaces;
+using DdnsUpdate.DdnsPlugin.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -51,7 +49,7 @@ public partial class IpAddressMonitor(
       // the method will exit fairly soon on its own (but you should still check for a cancellation
       // request since the Ctrl-C handler will initiate a cancellation request.
 
-      IList<IDdnsUpdateProvider> providerPlugins = [];
+      IList<IDdnsUpdatePlugin> ddnsPlugins = [];
       try
       {
          // we refresh here mainly so that any initial logging will have the proper values
@@ -66,7 +64,7 @@ public partial class IpAddressMonitor(
          this.LogInitialIpAddress();
 
          // load all plugins
-         providerPlugins = this.LoadDdnsUpdateProviderPlugins();
+         ddnsPlugins = this.LoadDdnsUpdatePlugins();
 
          // loop forever until a cancellation request is seen
          int loopCounter = 0;
@@ -110,19 +108,19 @@ public partial class IpAddressMonitor(
             ////////////////////////////
             // START: MAIN PLUGIN LOOP
             //
-            foreach (IDdnsUpdateProvider ddnsUpdateProvider in providerPlugins)
+            foreach (IDdnsUpdatePlugin ddnsUpdatePlugin in ddnsPlugins)
             {
-               List<string> updateDomainNames = await ddnsUpdateProvider.GetDomainNamesAsync();
+               List<string> updateDomainNames = await ddnsUpdatePlugin.GetDomainNamesAsync();
                if (updateDomainNames.Count > 0)
                {
-                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s) for {ddnsUpdateProvider.ProviderName}");
+                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s) for {ddnsUpdatePlugin.PluginName}");
 
                   // update all ddns records...woo hoo
-                  await this.UpdateDomainIpAddresses(ddnsUpdateProvider, updateDomainNames, loopCounter, ip, cancelToken);
+                  await this.UpdateDomainIpAddresses(ddnsUpdatePlugin, updateDomainNames, loopCounter, ip, cancelToken);
                }
                else
                {
-                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: No enabled domain(s) found for {ddnsUpdateProvider.ProviderName}; skip DNS update(s)");
+                  this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: No enabled domain(s) found for {ddnsUpdatePlugin.PluginName}; skip DNS update(s)");
                }
             }
 
@@ -133,7 +131,7 @@ public partial class IpAddressMonitor(
             // remember last ip if it's changed
             if (ip != lastIpAddress)
             {
-               await this.SendEmailIpAddressChangedAsync(providerPlugins, loopCounter, lastIpAddress, ip, cancelToken); // optional based on config
+               await this.SendEmailIpAddressChangedAsync(ddnsPlugins, loopCounter, lastIpAddress, ip, cancelToken); // optional based on config
                this.SaveLastIpAddress(ip);
             }
 
@@ -154,14 +152,14 @@ public partial class IpAddressMonitor(
          this.logger.LogAny(LogLevel.Debug, $"Ending: {nameof(IpAddressMonitor)}.{nameof(this.ExecuteAsync)}");
 
          // now that we've signaled we're done, dispose of plugins; do it after everything in case it bombs, we're basically clean
-         if (providerPlugins != null)
+         if (ddnsPlugins != null)
          {
-            UnloadDdnsUpdateProviderPlugins(providerPlugins);
+            UnloadDdnsUpdatePlugins(ddnsPlugins);
          }
       }
    }
 
-   private IList<IDdnsUpdateProvider> LoadDdnsUpdateProviderPlugins()
+   private IList<IDdnsUpdatePlugin> LoadDdnsUpdatePlugins()
    {
       // we'll need a context instance when providers are created (ctor call)
       var loggerContext = new LoggerContext(
@@ -170,47 +168,45 @@ public partial class IpAddressMonitor(
          this.PluginLogError,
          this.PluginLogCritical);
 
-      var contextInstance = new DdnsUpdateProviderInstanceContext(this.configuration, loggerContext);
-
       // load all plugins from main plugin directory
       string topLevelPluginDirectory = FilePathHelper.ApplicationPluginDirectory;
-      this.pluginManager.AddProviders(contextInstance, topLevelPluginDirectory, recursive: true);
+      this.pluginManager.AddPlugins(this.configuration, loggerContext, topLevelPluginDirectory, recursive: true);
 
-      foreach (IDdnsUpdateProvider plugin in this.pluginManager.Providers)
+      foreach (IDdnsUpdatePlugin plugin in this.pluginManager.Plugins)
       {
-         this.logger.LogAny(LogLevel.Information, $"{nameof(IDdnsUpdateProvider)} plugin loaded: {plugin.ProviderName}");
+         this.logger.LogAny(LogLevel.Information, $"{nameof(IDdnsUpdatePlugin)} plugin loaded: {plugin.PluginName}");
       }
 
-      return this.pluginManager.Providers;
+      return this.pluginManager.Plugins;
    }
 
-   private static void UnloadDdnsUpdateProviderPlugins(IList<IDdnsUpdateProvider> providerPlugins)
+   private static void UnloadDdnsUpdatePlugins(IList<IDdnsUpdatePlugin> plugins)
    {
       // basically, dispose of plugins
-      foreach (IDdnsUpdateProvider plugin in providerPlugins)
+      foreach (IDdnsUpdatePlugin plugin in plugins)
       {
          plugin.Dispose();
       }
    }
 
-   private void PluginLogInformation(string pluginLogName, string message)
+   private void PluginLogInformation(IDdnsUpdatePlugin plugin, string message)
    {
-      this.logger.LogAny(LogLevel.Information, message, pluginLogName);
+      this.logger.LogAny(LogLevel.Information, message, plugin.PluginName);
    }
 
-   private void PluginLogWarning(string pluginLogName, string message)
+   private void PluginLogWarning(IDdnsUpdatePlugin plugin, string message)
    {
-      this.logger.LogAny(LogLevel.Warning, message, pluginLogName);
+      this.logger.LogAny(LogLevel.Warning, message, plugin.PluginName);
    }
 
-   private void PluginLogError(string pluginLogName, string message)
+   private void PluginLogError(IDdnsUpdatePlugin plugin, string message)
    {
-      this.logger.LogAny(LogLevel.Error, message, pluginLogName);
+      this.logger.LogAny(LogLevel.Error, message, plugin.PluginName);
    }
 
-   private void PluginLogCritical(string pluginLogName, string message)
+   private void PluginLogCritical(IDdnsUpdatePlugin plugin, string message)
    {
-      this.logger.LogAny(LogLevel.Critical, message, pluginLogName);
+      this.logger.LogAny(LogLevel.Critical, message, plugin.PluginName);
    }
 
    private void RefreshApplicationSettings()
@@ -223,7 +219,7 @@ public partial class IpAddressMonitor(
    }
 
    private async Task UpdateDomainIpAddresses(
-      IDdnsUpdateProvider ddnsUpdateProvider,
+      IDdnsUpdatePlugin ddnsUpdatePlugin,
       List<string> domainNames,
       int loopCounter,
       string ipAddress,
@@ -243,8 +239,8 @@ public partial class IpAddressMonitor(
          };
 
          // beginning a batch of updates
-         this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Start batch IP address upate for {ddnsUpdateProvider.ProviderName}");
-         await ddnsUpdateProvider.BeginBatchUpdateIpAddressAsync();
+         this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: Start batch IP address upate for {ddnsUpdatePlugin.PluginName}");
+         await ddnsUpdatePlugin.BeginBatchUpdateIpAddressAsync();
 
          // ensure the foreach is completed before continuing
          var parallelForEachTask = Task.Run(() =>
@@ -253,7 +249,7 @@ public partial class IpAddressMonitor(
             {
                if (!cancelToken.IsCancellationRequested)
                {
-                  this.UpdateDomainIpAddressAsync(ddnsUpdateProvider, loopCounter, ipAddress, domainName).Wait(); // wait
+                  this.UpdateDomainIpAddressAsync(ddnsUpdatePlugin, loopCounter, ipAddress, domainName).Wait(); // wait
                }
             });
             }, cancelToken);
@@ -261,15 +257,15 @@ public partial class IpAddressMonitor(
          await parallelForEachTask;
 
          // ending a batch of updates
-         await ddnsUpdateProvider.EndBatchUpdateIpAddressAsync();
-         this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: End batch IP address upate for {ddnsUpdateProvider.ProviderName}");
+         await ddnsUpdatePlugin.EndBatchUpdateIpAddressAsync();
+         this.logger.LogAny(LogLevel.Information, $"#{loopCounter}: End batch IP address upate for {ddnsUpdatePlugin.PluginName}");
 
          // now that all updates are done, update stats
          await this.SaveUriStatisticsAsync();
       }
       catch (Exception ex)
       {
-         this.logger.LogAny(LogLevel.Critical, $"Exception while updating all domains for {ddnsUpdateProvider.ProviderName}: {ex.Message}");
+         this.logger.LogAny(LogLevel.Critical, $"Exception while updating all domains for {ddnsUpdatePlugin.PluginName}: {ex.Message}");
       }
    }
 
@@ -293,12 +289,12 @@ public partial class IpAddressMonitor(
    }
 
    private async Task<bool> UpdateDomainIpAddressAsync(
-      IDdnsUpdateProvider ddnsUpdateProvider,
+      IDdnsUpdatePlugin ddnsUpdatePlugin,
       int counter,
       string ip,
       string domainName)
    {
-      DdnsProviderStatusResult updateResult = await ddnsUpdateProvider.TryUpdateIpAddressAsync(
+      DdnsPluginStatusResult updateResult = await ddnsUpdatePlugin.TryUpdateIpAddressAsync(
          domainName,
          ip);
       if (updateResult.IsSuccess)
@@ -393,7 +389,7 @@ public partial class IpAddressMonitor(
    }
 
    private async Task SendEmailIpAddressChangedAsync(
-      IList<IDdnsUpdateProvider> providerPlugins,
+      IList<IDdnsUpdatePlugin> plugins,
       int loopCounter,
       string oldIpAddress,
       string newIpAddress,
@@ -417,8 +413,8 @@ public partial class IpAddressMonitor(
       if (!string.IsNullOrWhiteSpace(this.appSettings.WorkerServiceSettings.MessageFromEmailAddress)
          && !string.IsNullOrWhiteSpace(this.appSettings.WorkerServiceSettings.MessageToEmailAddress))
       {
-         string pluginNames = string.Join(", ", providerPlugins
-             .Select(x => x.ProviderName.Trim()));
+         string pluginNames = string.Join(", ", plugins
+             .Select(x => x.PluginName.Trim()));
          string oldIp = string.IsNullOrWhiteSpace(oldIpAddress) ? "N/A" : oldIpAddress;
          string subject = $"IP address update from {appName}, {DateTime.Now:G}";
          string body = $$"""

@@ -11,11 +11,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.Core", "DdnsUpda
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.Email", "DdnsUpdate.Email\DdnsUpdate.Email.csproj", "{74EFAB78-C5F4-495F-B9FA-6C3131C5A62B}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.DdnsProvider.Cloudflare", "DdnsUpdate.DdnsProvider.Cloudflare\DdnsUpdate.DdnsProvider.Cloudflare.csproj", "{FC180D36-617A-4CF7-94DD-D8BC35C0EE8F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.DdnsPlugin.Cloudflare", "DdnsUpdate.DdnsPlugin.Cloudflare\DdnsUpdate.DdnsPlugin.Cloudflare.csproj", "{FC180D36-617A-4CF7-94DD-D8BC35C0EE8F}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.DdnsProvider", "DdnsUpdate.DdnsProvider\DdnsUpdate.DdnsProvider.csproj", "{F264574D-DFD6-4E62-ADF0-44C3F10C48A8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.DdnsPlugin", "DdnsUpdate.DdnsPlugin\DdnsUpdate.DdnsPlugin.csproj", "{F264574D-DFD6-4E62-ADF0-44C3F10C48A8}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DdnsProviders", "DdnsProviders", "{02731B05-FA85-4A6C-9295-CFF2175382DB}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DdnsPlugins", "DdnsPlugins", "{02731B05-FA85-4A6C-9295-CFF2175382DB}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{DDB0A990-F295-48D8-9645-468853DEBF85}"
 	ProjectSection(SolutionItems) = preProject
@@ -39,7 +39,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHubRelease", "GitHubRele
 		..\tools\GitHubRelease\readme.txt = ..\tools\GitHubRelease\readme.txt
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.DdnsProvider.EmailOnly", "DdnsUpdate.DdnsProvider.EmailOnly\DdnsUpdate.DdnsProvider.EmailOnly.csproj", "{6DC43643-AD94-4C55-A07F-A01CE4817A5B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DdnsUpdate.DdnsPlugin.EmailOnly", "DdnsUpdate.DdnsPlugin.EmailOnly\DdnsUpdate.DdnsPlugin.EmailOnly.csproj", "{6DC43643-AD94-4C55-A07F-A01CE4817A5B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

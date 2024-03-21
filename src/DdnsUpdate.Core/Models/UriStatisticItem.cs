@@ -1,4 +1,4 @@
-﻿// "// <copyright file=\"UriStatisticItem.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="UriStatisticItem.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 

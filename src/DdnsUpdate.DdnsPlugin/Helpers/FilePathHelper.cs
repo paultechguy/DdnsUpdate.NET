@@ -1,8 +1,8 @@
-﻿// "// <copyright file=\"FilePathHelper.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="FilePathHelper.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
-namespace DdnsUpdate.DdnsProvider.Helpers;
+namespace DdnsUpdate.DdnsPlugin.Helpers;
 
 using System;
 

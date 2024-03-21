@@ -1,12 +1,12 @@
-﻿// "// <copyright file=\"CloudflareSettings.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="CloudflareSettings.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
-namespace DdnsUpdate.DdnsProvider.Cloudflare.Models;
+namespace DdnsUpdate.DdnsPlugin.Cloudflare.Models;
 
 /// <summary>
 /// A class representing the appSettings configuration section for the Cloudflare
-/// <see cref="DdnsUpdateProvider"/>.
+/// <see cref="DdnsUpdatePlugin"/>.
 /// </summary>
 public class CloudflareSettings
 {

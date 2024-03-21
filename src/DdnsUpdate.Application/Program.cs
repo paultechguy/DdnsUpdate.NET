@@ -1,4 +1,4 @@
-﻿// "// <copyright file=\"Program.cs\" company=\"PaulTechGuy\">
+﻿// "// <copyright file="Program.cs\" company="PaulTechGuy"
 // // Copyright (c) Paul Carver. All rights reserved.
 // // </copyright>"
 
@@ -10,7 +10,7 @@ using System.Threading;
 using CommandLine;
 using DdnsUpdate.Application.Helpers;
 using DdnsUpdate.Core.Models;
-using DdnsUpdate.DdnsProvider.Helpers;
+using DdnsUpdate.DdnsPlugin.Helpers;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
