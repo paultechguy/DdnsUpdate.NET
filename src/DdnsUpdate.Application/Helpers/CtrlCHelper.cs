@@ -1,6 +1,6 @@
-﻿// "// <copyright file="CtrlCHelper.cs\" company="PaulTechGuy"
-// // Copyright (c) Paul Carver. All rights reserved.
-// // </copyright>"
+﻿// <copyright file="CtrlCHelper.cs" company="PaulTechGuy"
+// Copyright (c) Paul Carver. All rights reserved.
+// </copyright>"
 
 namespace DdnsUpdate.Application.Helpers;
 

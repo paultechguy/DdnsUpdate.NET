@@ -1,6 +1,6 @@
-﻿// "// <copyright file="PluginManager.cs\" company="PaulTechGuy"
-// // Copyright (c) Paul Carver. All rights reserved.
-// // </copyright>"
+﻿// <copyright file="PluginManager.cs" company="PaulTechGuy"
+// Copyright (c) Paul Carver. All rights reserved.
+// </copyright>
 
 namespace DdnsUpdate.Service;
 

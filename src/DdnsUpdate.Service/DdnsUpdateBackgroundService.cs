@@ -1,6 +1,6 @@
-﻿// "// <copyright file="DdnsUpdateBackgroundService.cs\" company="PaulTechGuy"
-// // Copyright (c) Paul Carver. All rights reserved.
-// // </copyright>"
+﻿// <copyright file="DdnsUpdateBackgroundService.cs" company="PaulTechGuy"
+// Copyright (c) Paul Carver. All rights reserved.
+// </copyright>"
 
 namespace DdnsUpdate.Service;
 
@@ -12,14 +12,12 @@ using Microsoft.Extensions.Logging;
 
 public sealed class DdnsUpdateBackgroundService(
    IIpAddressMonitorService appService,
-   IServiceProvider serviceProvider,
    IHostApplicationLifetime applicationLifetime,
    IConfiguration configuration,
    ILogger<DdnsUpdateBackgroundService> logger)
    : BackgroundService
 {
    private readonly IIpAddressMonitorService appService = appService;
-   private readonly IServiceProvider serviceProvider = serviceProvider;
    private readonly IConfiguration configuration = configuration;
    private readonly IHostApplicationLifetime appLifetime = applicationLifetime;
    private readonly ILogger<DdnsUpdateBackgroundService> logger = logger;

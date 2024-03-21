@@ -1,6 +1,6 @@
-﻿// "// <copyright file="WorkerServiceSettings.cs\" company="PaulTechGuy"
-// // Copyright (c) Paul Carver. All rights reserved.
-// // </copyright>"
+﻿// <copyright file="WorkerServiceSettings.cs" company="PaulTechGuy"
+// Copyright (c) Paul Carver. All rights reserved.
+// </copyright>"
 
 namespace DdnsUpdate.Core.Models;
 

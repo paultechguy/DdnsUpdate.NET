@@ -1,6 +1,6 @@
-﻿// "// <copyright file="DdnsUpdatePlugin.cs\" company="PaulTechGuy"
-// // Copyright (c) Paul Carver. All rights reserved.
-// // </copyright>"
+﻿// <copyright file="DdnsUpdatePlugin.cs" company="PaulTechGuy"
+// Copyright (c) Paul Carver. All rights reserved.
+// </copyright>"
 
 namespace DdnsUpdate.DdnsPlugin.EmailOnly;
 

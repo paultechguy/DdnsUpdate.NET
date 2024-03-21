@@ -1,6 +1,6 @@
-﻿// "// <copyright file="IpAddressMonitor.cs\" company="PaulTechGuy"
-// // Copyright (c) Paul Carver. All rights reserved.
-// // </copyright>"
+﻿// <copyright file="IpAddressMonitor.cs" company="PaulTechGuy"
+// Copyright (c) Paul Carver. All rights reserved.
+// </copyright>"
 
 namespace DdnsUpdate.Service;
 
@@ -415,7 +415,8 @@ public partial class IpAddressMonitor(
       {
          string pluginNames = string.Join(", ", plugins
              .Select(x => x.PluginName.Trim()));
-         string oldIp = string.IsNullOrWhiteSpace(oldIpAddress) ? "N/A" : oldIpAddress;
+         pluginNames = string.IsNullOrWhiteSpace(pluginNames) ? "None" : pluginNames;
+         string oldIp = string.IsNullOrWhiteSpace(oldIpAddress) ? "Missing" : oldIpAddress;
          string subject = $"IP address update from {appName}, {DateTime.Now:G}";
          string body = $$"""
             <html><head></head><body>

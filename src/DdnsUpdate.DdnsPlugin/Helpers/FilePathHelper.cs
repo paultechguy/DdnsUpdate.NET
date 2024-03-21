@@ -1,6 +1,6 @@
-﻿// "// <copyright file="FilePathHelper.cs\" company="PaulTechGuy"
-// // Copyright (c) Paul Carver. All rights reserved.
-// // </copyright>"
+﻿// <copyright file="FilePathHelper.cs" company="PaulTechGuy"
+// Copyright (c) Paul Carver. All rights reserved.
+// </copyright>"
 
 namespace DdnsUpdate.DdnsPlugin.Helpers;
 
@@ -14,7 +14,7 @@ public static class FilePathHelper
 
    public const string CompanyName = "PaulTechGuy";
 
-   public const string ApplicationName = "DdnsUpdate";
+   public const string ApplicationName = "DdnsUpdate.NET";
 
    private static string configDirectory = string.Empty;
 

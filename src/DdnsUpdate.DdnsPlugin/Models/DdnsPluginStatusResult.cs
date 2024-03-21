@@ -1,6 +1,6 @@
-﻿// "// <copyright file="DdnsPluginStatusResult.cs\" company="PaulTechGuy"
-// // Copyright (c) Paul Carver. All rights reserved.
-// // </copyright>"
+﻿// <copyright file="DdnsPluginStatusResult.cs" company="PaulTechGuy"
+// Copyright (c) Paul Carver. All rights reserved.
+// </copyright>"
 
 namespace DdnsUpdate.DdnsPlugin.Models;
 
