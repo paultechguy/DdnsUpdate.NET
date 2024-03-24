@@ -2,11 +2,12 @@
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>"
 
-namespace DdnsUpdate.DdnsPlugin.EmailOnly;
+namespace PaulTechGuy.EmailOnly;
 
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DdnsUpdate.DdnsPlugin;
 using DdnsUpdate.DdnsPlugin.Interfaces;
 using DdnsUpdate.DdnsPlugin.Models;
 

@@ -66,6 +66,10 @@
         </None>
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="plugins\" />
+    </ItemGroup>
+
         <Choose>
             <When Condition="'$(Configuration)'=='Debug'">
                 <ItemGroup>
@@ -85,4 +89,28 @@
                 </ItemGroup>
             </When>
         </Choose>
+
+    <!--<Target Name="CustomAfterBuild" AfterTargets="Build">
+        <Message Text="doing custom build after" Importance="high" />
+        <Message Text="ProjectDir: $(ProjectDir)" Importance="high" />
+        <Message Text="TargetDir: $(TargetDir)" Importance="high" />
+        <Message Text="PublishUrl: $(PublishUrl)" Importance="high" />
+        <Exec StandardOutputImportance="high" Command="powershell.exe -File '$(ProjectDir)DdnsUpdatePostPublish.ps1' -ProjectDir '$(ProjectDir)' -TargetDir '$(TargetDir)' -PublishUrl '$(PublishUrl)'" />
+    </Target>-->
+
+    <Target Name="Trigger" AfterTargets="Build">
+        <PropertyGroup>
+            <PowerShellCommand Condition=" '$(OS)' == 'Windows_NT' ">powershell.exe</PowerShellCommand>
+            <PowerShellCommand Condition=" '$(OS)' == 'Unix' ">pwsh</PowerShellCommand>
+            <ClientGenTriggerScript>$(ProjectDir)DdnsUpdatePostPublish.ps1</ClientGenTriggerScript>
+        </PropertyGroup>
+        <Message Text="Script: $(ClientGenTriggerScript)" Importance="high" />
+        <Message Text="OS: $(OS)" Importance="high" />
+        <Message Text="ProjectDir: $(ProjectDir)" Importance="high" />
+        <Message Text="TargetDir: $(TargetDir)" Importance="high" />
+        <Message Text="PublishUrl: $(PublishUrl)" Importance="high" />
+        <Exec EchoOff="false" Command="$(PowerShellCommand) -ExecutionPolicy Unrestricted -NoProfile -File &quot;$(ClientGenTriggerScript)&quot; -OS $(OS) -ProjectDir &quot;$(ProjectDir)&quot;&quot; -TargetDir &quot;$(TargetDir)&quot;&quot; -PublishUrl &quot;$(PublishUrl)&quot; --Verbose" />
+
+    </Target>
+    
 </Project>

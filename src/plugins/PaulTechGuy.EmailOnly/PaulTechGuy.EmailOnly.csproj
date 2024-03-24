@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DdnsUpdate.DdnsPlugin\DdnsUpdate.DdnsPlugin.csproj" />
+    <ProjectReference Include="..\..\DdnsUpdate.DdnsPlugin\DdnsUpdate.DdnsPlugin.csproj" />
   </ItemGroup>
 
 </Project>

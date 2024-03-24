@@ -2,7 +2,7 @@
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>"
 
-namespace DdnsUpdate.DdnsPlugin.Cloudflare.Models;
+namespace PaulTechGuy.Cloudflare.Models;
 
 /// <summary>
 /// A class representing a domain configuration to be used with a DDNS

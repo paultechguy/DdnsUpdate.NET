@@ -2,16 +2,17 @@
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>"
 
-namespace DdnsUpdate.DdnsPlugin.Cloudflare;
+namespace PaulTechGuy.Cloudflare;
 
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using DdnsUpdate.DdnsPlugin.Cloudflare.Models;
+using DdnsUpdate.DdnsPlugin;
 using DdnsUpdate.DdnsPlugin.Interfaces;
 using DdnsUpdate.DdnsPlugin.Models;
+using PaulTechGuy.Cloudflare.Models;
 
 public class DdnsUpdatePlugin(
    DdnsUpdatePluginContext context) : IDdnsUpdatePlugin

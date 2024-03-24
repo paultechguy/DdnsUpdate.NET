@@ -2,7 +2,7 @@
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>"
 
-namespace DdnsUpdate.DdnsPlugin.Cloudflare.Models;
+namespace PaulTechGuy.Cloudflare.Models;
 
 /// <summary>
 /// A class representing the appSettings configuration section for the Cloudflare
