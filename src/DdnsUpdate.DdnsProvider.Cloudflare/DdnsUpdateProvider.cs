@@ -2,8 +2,8 @@
 // <copyright file="DdnsUpdateProvider.cs" company="PaulTechGuy">
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
+// Use of this source code is governed by an MIT-style license that can
+// be found in the LICENSE file or at https://opensource.org/licenses/MIT.
 // -------------------------------------------------------------------------
 
 namespace DdnsUpdate.DdnsProvider.Cloudflare;
@@ -137,10 +137,13 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
             content = ipAddress
          }), Encoding.UTF8, "application/json");
 
-         HttpResponseMessage response = await client.PutAsync(url, content);
+         // Use PATCH, not PUT.  PUT is an overwrite: Cloudflare resets any field we omit
+         // back to its default, which silently turns off the proxy (proxied=false) on
+         // proxied records.  PATCH changes only the fields we send.
+         HttpResponseMessage response = await client.PatchAsync(url, content);
          error = response.IsSuccessStatusCode
                ? string.Empty
-               : $"{response.StatusCode}: {response.ReasonPhrase}";
+               : $"{response.StatusCode}: {response.ReasonPhrase}; {await response.Content.ReadAsStringAsync()}";
       }
       catch (Exception ex)
       {

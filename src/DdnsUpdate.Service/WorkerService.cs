@@ -2,8 +2,8 @@
 // <copyright file="WorkerService.cs" company="PaulTechGuy">
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
+// Use of this source code is governed by an MIT-style license that can
+// be found in the LICENSE file or at https://opensource.org/licenses/MIT.
 // -------------------------------------------------------------------------
 
 namespace DdnsUpdate.Service;
@@ -11,9 +11,9 @@ namespace DdnsUpdate.Service;
 using System.Collections.Generic;
 using System.Net;
 using System.Text.RegularExpressions;
+using DdnsUpdate.Core.Helpers;
 using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
-using DdnsUpdate.DdnsProvider.Helpers;
 using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.DdnsProvider.Models;
 using Microsoft.Extensions.Configuration;
@@ -29,7 +29,7 @@ public partial class WorkerService(
 {
    private const string LastIpAddressFileName = "LastIpAddress.txt";
    private const string UriStatisticsFileName = "UriStatistics.json";
-   private const int OneMinuteMilliseconds = 60000;
+   private readonly string lastIPAddressFilePath = GetLastIpAddressFilePath();
    private readonly IConfiguration configuration = configuration;
    private readonly ILogger<WorkerService> logger = logger;
    private readonly IHttpClientFactory clientFactory = clientFactory;
@@ -38,7 +38,6 @@ public partial class WorkerService(
    private readonly CommandLineOptions commandLineOptions = commandLineOptions;
    private readonly Random rndIpAddressProvider = new();
    private readonly Regex ipAddressRegex = EmbeddedIpAddressRegEx();
-   private readonly object uriStatisticsLock = new();
    private ApplicationSettings appSettings = new();
    private UriStatistics uriStatistics = [];
 
@@ -97,7 +96,7 @@ public partial class WorkerService(
                else if (lastIpAddress == ip && !this.appSettings.DdnsSettings.AlwaysUpdateDdnsEvenIfUnchanged)
                {
                   // ip is he same as last time, and we bypass ddns updates if they are the same
-                  this.logger.LogInformation($"#{loopCounter}: IP address {ip} unchanged using {statsItem.Uri}; skip {updateDomainNames.Count} DNS update(s)");
+                  this.logger.LogInformation($"#{loopCounter}: IP address {ip} unchanged using {statsItem.Uri}; skip {updateDomainNames.Count} DDNS update(s)");
                   _ = this.SleepBetweenAllIpUpdates(cancelToken);
 
                   continue;
@@ -115,11 +114,11 @@ public partial class WorkerService(
                this.logger.LogInformation($"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
 
                // update all ddns records...woo hoo
-               await this.UpdateDomainIpAddresses(updateDomainNames, loopCounter, ip, cancelToken);
+               this.UpdateDomainIpAddresses(updateDomainNames, loopCounter, ip, cancelToken);
             }
             else
             {
-               this.logger.LogInformation($"#{loopCounter}: No enabled domains found; skip DNS update(s)");
+               this.logger.LogInformation($"#{loopCounter}: No enabled domains found; skip DDS update(s)");
             }
 
             // sleep if we're not cancelling
@@ -136,7 +135,7 @@ public partial class WorkerService(
       }
       finally
       {
-         this.logger.LogDebug($"Ending: {nameof(WorkerService)}.{nameof(this.ExecuteAsync)}");
+         this.logger.LogInformation($"Ending: {nameof(WorkerService)}.{nameof(this.ExecuteAsync)}");
       }
    }
 
@@ -149,7 +148,7 @@ public partial class WorkerService(
       this.appSettings = this.configuration.GetSection("applicationSettings").Get<ApplicationSettings>() ?? throw new InvalidOperationException();
    }
 
-   private async Task UpdateDomainIpAddresses(
+   private void UpdateDomainIpAddresses(
       List<string> domainNames,
       int loopCounter,
       string ipAddress,
@@ -174,9 +173,6 @@ public partial class WorkerService(
             // no need to dispose of client
          }
       });
-
-      // now that all updates are done, update stats
-      await this.SaveUriStatisticsAsync();
    }
 
    private void LogInitialStartupMessages()
@@ -184,17 +180,15 @@ public partial class WorkerService(
       this.logger.LogDebug($"Starting: {nameof(WorkerService)}.{nameof(this.ExecuteAsync)}");
 
       // how often will we be checking for updates
-      decimal updateMilliseconds = this.GetUpdatePauseMilliseconds();
-      this.logger.LogInformation($"IP address updates will be performed every {Math.Round(updateMilliseconds / OneMinuteMilliseconds, 2)} minute(s)");
+      decimal updateMinutes = this.appSettings.DdnsSettings.AfterAllDdnsUpdatePauseMinutes;
+      this.logger.LogInformation("{updateMinutes}", $"IP address updates will be performed every {updateMinutes} minute(s)");
 
       // will ip address changes generate email notifications
       string notifyUpdates = this.appSettings.WorkerServiceSettings.MessageIsEnabled ? string.Empty : " not";
       this.logger.LogInformation($"IP address updates will{notifyUpdates} push email notifications");
 
       // put some helpful into in the log (or console) about the data directory
-      this.logger.LogInformation($"config files are in {FilePathHelper.ApplicationConfigDirectory}");
-      this.logger.LogInformation($"log files are in {FilePathHelper.ApplicationLogDirectory}");
-      this.logger.LogInformation($"data files are in {FilePathHelper.ApplicationDataDirectory}");
+      this.logger.LogInformation($"Application data files (logs, statistics, etc.) are stored in {FilePathHelper.ApplicationDataDirectory}");
    }
 
    private async Task<bool> UpdateDomainIpAddressAsync(
@@ -255,6 +249,7 @@ public partial class WorkerService(
 
                // increment this uri stats and rewrite stats file
                statsItem.IncrementSuccessCount();
+               await this.SaveUriStatisticsAsync();
 
                return (ipAddress!.ToString(), statsItem);
             }
@@ -350,39 +345,35 @@ public partial class WorkerService(
 
    private bool SleepBetweenAllIpUpdates(CancellationToken cancelToken)
    {
-      int pauseMilliseconds = this.GetUpdatePauseMilliseconds();
+      const int OneMinuteMs = 60000;
+      int pauseMinutes = this.appSettings.DdnsSettings.AfterAllDdnsUpdatePauseMinutes;
 
-      bool wasCanceled = cancelToken.WaitHandle.WaitOne(pauseMilliseconds);
+      // if missing from config...
+      if (pauseMinutes <= 0)
+      {
+         this.logger.LogWarning($"Configuration property {nameof(this.appSettings.DdnsSettings.AfterAllDdnsUpdatePauseMinutes)} may be missing; defaulting to one minute pause");
+         pauseMinutes = OneMinuteMs;
+      }
+
+      bool wasCanceled = cancelToken.WaitHandle.WaitOne(pauseMinutes * OneMinuteMs);
 
       return wasCanceled;
    }
 
    private string LoadLastIpAddress()
    {
-      string filePath = GetLastIpAddressFilePath();
-      if (!File.Exists(filePath))
-      {
-         // maybe first time we're running; create empty file;
-         // this also ensures after the very first time the app runs, we
-         // have a "data" directory
-         this.SaveLastIpAddress(string.Empty);
-
-         return string.Empty;
-      }
-
-      return File.ReadAllText(filePath);
+      return File.Exists(this.lastIPAddressFilePath) ? File.ReadAllText(this.lastIPAddressFilePath) : string.Empty;
    }
 
    private void SaveLastIpAddress(string ipAddress)
    {
-      string filePath = GetLastIpAddressFilePath();
-      string folder = Path.GetDirectoryName(filePath) ?? throw new InvalidOperationException($"Unable to call {nameof(Path.GetDirectoryName)}");
+      string folder = Path.GetDirectoryName(this.lastIPAddressFilePath) ?? throw new InvalidOperationException(nameof(this.lastIPAddressFilePath));
       if (!Directory.Exists(folder))
       {
          Directory.CreateDirectory(folder);
       }
 
-      File.WriteAllText(filePath, ipAddress);
+      File.WriteAllText(this.lastIPAddressFilePath, ipAddress);
    }
 
    private void LogInitialIpAddress()
@@ -407,11 +398,7 @@ public partial class WorkerService(
    {
       try
       {
-         lock (this.uriStatisticsLock)
-         {
-            // just Wait inside lock
-            this.uriStatistics.WriteFileAsync(GetUriStatisticsFilePath()).Wait();
-         }
+         await this.uriStatistics.WriteFileAsync(GetUriStatisticsFilePath());
       }
       catch (Exception ex)
       {
@@ -420,8 +407,6 @@ public partial class WorkerService(
          // just continue and hopefully thing will work the next time
          // (maybe an editor has the file locked)
       }
-
-      await Task.CompletedTask;
    }
 
    private async Task LoadUriStatisticsAsync()
@@ -430,17 +415,11 @@ public partial class WorkerService(
       if (Path.Exists(filePath))
       {
          // load existing uris with their stats
-         lock (this.uriStatisticsLock)
-         {
-            // just Wait inside lock
-            this.uriStatistics = UriStatistics.ReadFileAsync(filePath).Result;
-         }
+         this.uriStatistics = await UriStatistics.ReadFileAsync(filePath);
       }
 
       // merge in any uris from the settings
       this.uriStatistics.Merge(this.appSettings.DdnsSettings.IpAddressProviders);
-
-      await Task.CompletedTask;
    }
 
    private static string GetLastIpAddressFilePath()
@@ -451,16 +430,6 @@ public partial class WorkerService(
    private static string GetUriStatisticsFilePath()
    {
       return Path.Combine(FilePathHelper.ApplicationDataDirectory, UriStatisticsFileName);
-   }
-
-   private int GetUpdatePauseMilliseconds()
-   {
-      decimal minutes = this.appSettings.DdnsSettings.AfterAllDdnsUpdatePauseMinutes <= 0M
-         ? 1M
-         : this.appSettings.DdnsSettings.AfterAllDdnsUpdatePauseMinutes;
-
-      // convert to ms
-      return (int)(minutes * OneMinuteMilliseconds);
    }
 
    [GeneratedRegex(@"(?<IpAddress>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", RegexOptions.Multiline)]

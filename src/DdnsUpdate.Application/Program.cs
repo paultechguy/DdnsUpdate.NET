@@ -2,8 +2,8 @@
 // <copyright file="Program.cs" company="PaulTechGuy">
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
+// Use of this source code is governed by an MIT-style license that can
+// be found in the LICENSE file or at https://opensource.org/licenses/MIT.
 // -------------------------------------------------------------------------
 
 namespace DdnsUpdate.Application;
@@ -13,8 +13,8 @@ using System.Reflection;
 using System.Threading;
 using CommandLine;
 using DdnsUpdate.Application.Helpers;
+using DdnsUpdate.Core.Helpers;
 using DdnsUpdate.Core.Models;
-using DdnsUpdate.DdnsProvider.Helpers;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
@@ -44,7 +44,12 @@ public partial class Program : IDisposable
          // so we can use for dependency injections
          this.commandLineOptions = cmdLineOptions;
 
-         CreateBootstrapLogger();
+         // init logger almost first so other startup stuff can use it;
+         // the initial bootstrap logger is able to log errors during start-up;
+         // it is replaced by the logger configured in `UseSerilog()`
+         Log.Logger = new LoggerConfiguration()
+             .WriteTo.Console()
+             .CreateBootstrapLogger();
 
          try
          {
@@ -99,25 +104,9 @@ public partial class Program : IDisposable
       Environment.Exit(1);
    }
 
-   private static void CreateBootstrapLogger()
-   {
-      // init logger almost first so other startup stuff can use it;
-      // the initial bootstrap logger is able to log errors during start-up;
-      // it is replaced by the logger configured in `UseSerilog()`
-      string logDirectory = FilePathHelper.ApplicationLogDirectory;
-      if (!Directory.Exists(logDirectory))
-      {
-         Directory.CreateDirectory(logDirectory);
-      }
-
-      Log.Logger = new LoggerConfiguration()
-          .WriteTo.Console()
-          .CreateBootstrapLogger();
-   }
-
    private static void LogStarting()
    {
-      Log.Information($"Starting {FilePathHelper.ApplicationName}.NET by {FilePathHelper.CompanyName}, v{Assembly.GetExecutingAssembly().GetName().Version!.ToString(3)}");
+      Log.Information($"Starting {FilePathHelper.ApplicationName} by {FilePathHelper.CompanyName}, v{Assembly.GetExecutingAssembly().GetName().Version}");
 
       if (Environment.UserInteractive)
       {
@@ -160,7 +149,7 @@ public partial class Program : IDisposable
       if (!string.IsNullOrWhiteSpace(envName))
       {
          // now be sure we have the proper appsettings file for this env
-         string envFilePath = Path.Combine(FilePathHelper.ApplicationConfigDirectory, $"appsettings.{envName!}.json");
+         string envFilePath = $@".\appsettings.{envName!}.json";
          if (File.Exists(envFilePath))
          {
             // we're good to allow everything else to handle the standard dotnet env
@@ -172,7 +161,7 @@ public partial class Program : IDisposable
       }
 
       // try to determine if we're in development env
-      string appsettingsPath = Path.Combine(FilePathHelper.ApplicationConfigDirectory, "appsettings.development.json");
+      string appsettingsPath = $@".\appsettings.development.json";
       if (File.Exists(appsettingsPath))
       {
          // create env variable for this process
@@ -182,7 +171,7 @@ public partial class Program : IDisposable
       }
 
       // try to determine if we're in production env
-      appsettingsPath = Path.Combine(FilePathHelper.ApplicationConfigDirectory, "appsettings.production.json");
+      appsettingsPath = $@".\appsettings.production.json";
       if (File.Exists(appsettingsPath))
       {
          // create env variable for this process
@@ -193,7 +182,7 @@ public partial class Program : IDisposable
 
       // no dotnet env variable exists and no development or production appsettings exist;
       // we need something so this is, well, bad
-      throw new ApplicationException($"Unable to determine DOTNET environment; no environment variable, no appsettings.{{enviroment}}.json.  {nameof(FilePathHelper.ApplicationConfigDirectory)}: {FilePathHelper.ApplicationConfigDirectory}");
+      throw new ApplicationException($"Unable to determine DOTNET environment; no environment variable, no appsettings.{{enviroment}}.json");
    }
 
    private void ConfigureCtrlCHandler()
