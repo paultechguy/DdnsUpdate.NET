@@ -2,8 +2,8 @@
 // <copyright file="DdnsSettings.cs" company="PaulTechGuy">
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
+// Use of this source code is governed by an MIT-style license that can
+// be found in the LICENSE file or at https://opensource.org/licenses/MIT.
 // -------------------------------------------------------------------------
 
 namespace DdnsUpdate.Core.Models;
@@ -12,7 +12,7 @@ public class DdnsSettings
 {
    public const string ConfigurationName = "DdnsSettings";
 
-   public decimal AfterAllDdnsUpdatePauseMinutes { get; set; }
+   public int AfterAllDdnsUpdatePauseMinutes { get; set; }
 
    public bool AlwaysUpdateDdnsEvenIfUnchanged { get; set; } = true;
 

@@ -6,7 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <Version>0.1.0</Version>
-        <AssemblyName>ddnsupdate</AssemblyName>
+        <AssemblyName>DdnsUpdate</AssemblyName>
     </PropertyGroup>
 
     <ItemGroup>
@@ -15,7 +15,6 @@
         <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
         <PackageReference Include="Serilog.Enrichers.Environment" Version="2.3.0" />
@@ -37,49 +36,25 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="config\appsettings.json">
+        <None Update="appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="config\appsettings.production.json">
-          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-        </None>
-        <None Update="config\appsettings.production.user.json">
-          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-        </None>
-        <None Update="plugins\readme.txt">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="service_setup\linux_daemon_setup\daemon_install.sh">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="service_setup\linux_daemon_setup\daemon_uninstall.sh">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="service_setup\linux_daemon_setup\ddnsupdate.service">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="service_setup\windows_service_setup\service_install.ps1">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="service_setup\windows_service_setup\service_uninstall.ps1">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>
 
         <Choose>
             <When Condition="'$(Configuration)'=='Debug'">
                 <ItemGroup>
-                    <None Update="config\appsettings.development.json">
+                    <None Update="appsettings.development.json">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                     </None>
-                    <None Update="config\appsettings.development.user.json">
+                    <None Update="appsettings.development.user.json">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                     </None>
                 </ItemGroup>
             </When>
             <When Condition="'$(Configuration)'=='Release'">
                 <ItemGroup>
-                    <None Update="config\appsettings.production.json">
+                    <None Update="appsettings.production.json">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                     </None>
                 </ItemGroup>

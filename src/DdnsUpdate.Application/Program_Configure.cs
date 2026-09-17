@@ -2,17 +2,17 @@
 // <copyright file="Program_Configure.cs" company="PaulTechGuy">
 // Copyright (c) Paul Carver. All rights reserved.
 // </copyright>
-// Use of this source code is governed by Apache License 2.0 that can
-// be found at https://www.apache.org/licenses/LICENSE-2.0.
+// Use of this source code is governed by an MIT-style license that can
+// be found in the LICENSE file or at https://opensource.org/licenses/MIT.
 // -------------------------------------------------------------------------
 
 namespace DdnsUpdate.Application;
 
 using System;
 using DdnsUpdate.Core;
+using DdnsUpdate.Core.Helpers;
 using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
-using DdnsUpdate.DdnsProvider.Helpers;
 using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.Email;
 using DdnsUpdate.Service;
@@ -87,12 +87,11 @@ public partial class Program
    private IHostBuilder CreateHostBuilder()
    {
       // build configuration first so we can use it (e.g. default service name)
-      string configDir = FilePathHelper.ApplicationConfigDirectory;
       IConfigurationRoot configuration = new ConfigurationBuilder()
          .SetBasePath(Directory.GetCurrentDirectory())
-         .AddJsonFile(Path.Combine(configDir, $"appsettings.json"), optional: false, reloadOnChange: true)
-         .AddJsonFile(Path.Combine(configDir, $"appsettings.{this.dotnetEnvironmentName}.json"), optional: true, reloadOnChange: true)
-         .AddJsonFile(Path.Combine(configDir, $"appsettings.{this.dotnetEnvironmentName}.user.json"), optional: true, reloadOnChange: true)
+         .AddJsonFile($"appsettings.json", optional: false, reloadOnChange: true)
+         .AddJsonFile($"appsettings.{this.dotnetEnvironmentName}.json", optional: true, reloadOnChange: true)
+         .AddJsonFile($"appsettings.{this.dotnetEnvironmentName}.user.json", optional: true, reloadOnChange: true)
          .AddEnvironmentVariables()
          .AddCommandLine(Environment.GetCommandLineArgs())
          .Build();
@@ -112,7 +111,7 @@ public partial class Program
          .UseSerilog((hostContext, services, configuration) =>
          {
             configuration.WriteTo.File(
-               $"{FilePathHelper.ApplicationLogDirectory}{Path.DirectorySeparatorChar}log_.txt",
+               $"{FilePathHelper.ApplicationDataDirectory}\\logs\\log_.txt",
                outputTemplate: "{Timestamp:MM/dd/yy HH:mm:ss.fff}|{Level:u3}|{Message}{NewLine}",
                rollingInterval: RollingInterval.Day,
                retainedFileCountLimit: 31,
