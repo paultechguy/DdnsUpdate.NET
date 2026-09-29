@@ -26,26 +26,28 @@ managed centrally in `Directory.Packages.props`.
 
 ## Build
 
-Open `src\DdnsUpdate.sln` in Visual Studio, or from the repository root:
+Open `DdnsUpdate.slnx` (repository root) in Visual Studio, or from the
+repository root:
 
 ```powershell
-cd src
-dotnet publish .\DdnsUpdate.Application -p:PublishProfile=win-x64-single
+dotnet build
+dotnet test
+dotnet publish src\DdnsUpdate.Application -p:PublishProfile=win-x64-single
 ```
 
 The `win-x64-single` publish profile
-(`DdnsUpdate.Application\Properties\PublishProfiles\win-x64-single.pubxml`)
-sets Release, `win-x64`, self-contained, single file, and the `src\publish`
-output folder. It is equivalent to:
+(`src\DdnsUpdate.Application\Properties\PublishProfiles\win-x64-single.pubxml`)
+sets Release, `win-x64`, self-contained, single file, and the `publish` output
+folder at the repository root. It is equivalent to:
 
 ```powershell
-dotnet publish .\DdnsUpdate.Application\DdnsUpdate.Application.csproj `
+dotnet publish src\DdnsUpdate.Application\DdnsUpdate.Application.csproj `
   -c Release `
   -r win-x64 `
   --self-contained true `
   -p:PublishSingleFile=true `
   -p:IncludeNativeLibrariesForSelfExtract=true `
-  -o .\publish
+  -o publish
 ```
 
 `DdnsUpdate.Application.csproj` sets `<AssemblyName>DdnsUpdate</AssemblyName>`,

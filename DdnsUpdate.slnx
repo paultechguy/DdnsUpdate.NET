@@ -1,0 +1,26 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="CHANGELOG.md" />
+    <File Path="CLAUDE.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="exclusion.dic" />
+    <File Path="global.json" />
+    <File Path="LICENSE.txt" />
+    <File Path="README.md" />
+    <File Path="readme.url" />
+  </Folder>
+  <Folder Name="/docs/">
+    <File Path="docs/BUILDING.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/DdnsUpdate.Application/DdnsUpdate.Application.csproj" />
+    <Project Path="src/DdnsUpdate.Core/DdnsUpdate.Core.csproj" />
+    <Project Path="src/DdnsUpdate.DdnsProvider/DdnsUpdate.DdnsProvider.csproj" />
+    <Project Path="src/DdnsUpdate.DdnsProvider.Cloudflare/DdnsUpdate.DdnsProvider.Cloudflare.csproj" />
+    <Project Path="src/DdnsUpdate.Email/DdnsUpdate.Email.csproj" />
+    <Project Path="src/DdnsUpdate.Service/DdnsUpdate.Service.csproj" />
+  </Folder>
+</Solution>

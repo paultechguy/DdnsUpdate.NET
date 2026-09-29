@@ -19,19 +19,20 @@ DdnsUpdate is a Windows app that detects the machine's external IPv4 address and
 
 ## Commands
 
-All commands run from `src/`.
+All commands run from the repository root. `DdnsUpdate.slnx` is the only solution, so `dotnet build` and `dotnet test` find it.
 
 ```powershell
-dotnet build .\DdnsUpdate.sln
+dotnet build
+dotnet test
 
 # Run locally (Debug copies appsettings.development*.json → development environment)
-dotnet run --project .\DdnsUpdate.Application
+dotnet run --project src\DdnsUpdate.Application
 
-# Production single-file publish to src\publish (profile in DdnsUpdate.Application\Properties\PublishProfiles)
-dotnet publish .\DdnsUpdate.Application -p:PublishProfile=win-x64-single
+# Production single-file publish to .\publish (profile in src\DdnsUpdate.Application\Properties\PublishProfiles)
+dotnet publish src\DdnsUpdate.Application -p:PublishProfile=win-x64-single
 ```
 
-- There are no test projects.
+Layout: `src/` holds the six app projects, `tests/` the test projects, and `docs/` the build and deploy notes. Shared build files (`Directory.Build.props`, `Directory.Packages.props`, `global.json`, `.editorconfig`) are at the root.
 - To smoke-test a single pass, set the environment variable `applicationSettings__ddnsSettings__maximumDdnsUpdateIterations=1` and run the Debug exe.
   - Without it, the app sleeps 60 minutes between passes.
   - Don't pass settings as command-line arguments. CommandLineParser rejects unknown arguments, and the app then exits with code 1 without running.
