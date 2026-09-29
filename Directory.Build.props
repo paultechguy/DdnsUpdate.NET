@@ -1,0 +1,25 @@
+<Project>
+  <!-- Settings shared by every project in the repository. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+
+    <Version>0.2.0</Version>
+    <Company>PaulTechGuy</Company>
+    <Authors>PaulTechGuy</Authors>
+    <Product>DdnsUpdate</Product>
+    <Copyright>Copyright (c) Paul Carver. All rights reserved.</Copyright>
+
+    <!-- surface analyzer rules from .editorconfig during command-line builds, not just in the IDE -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

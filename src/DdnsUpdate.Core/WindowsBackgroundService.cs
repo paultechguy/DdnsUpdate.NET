@@ -12,6 +12,10 @@ using DdnsUpdate.Core.Interfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+/// <summary>
+/// The hosted service that runs <see cref="IWorkerService"/> and stops the host when it finishes,
+/// so the same code works as a Windows Service, a scheduled task, or a console app.
+/// </summary>
 public sealed class WindowsBackgroundService(
    IWorkerService appService,
    IHostApplicationLifetime applicationLifetime,
@@ -22,16 +26,18 @@ public sealed class WindowsBackgroundService(
    private readonly IHostApplicationLifetime appLifetime = applicationLifetime;
    private readonly ILogger<WindowsBackgroundService> logger = logger;
 
+   /// <inheritdoc/>
    protected override async Task ExecuteAsync(CancellationToken cancelToken)
    {
-      this.logger.LogDebug($"Starting {nameof(WindowsBackgroundService)}.{nameof(this.ExecuteAsync)}");
+      this.logger.LogDebug("Starting {Class}.{Method}", nameof(WindowsBackgroundService), nameof(this.ExecuteAsync));
 
       try
       {
-         await this.appService.ExecuteAsync(cancelToken);
-
-         // we need to stop the hosted service, which will ensure application exit
-         this.appLifetime.StopApplication();
+         if (!await this.appService.ExecuteAsync(cancelToken))
+         {
+            // e.g. a dry run that found a problem; report it to scripts through the exit code
+            Environment.ExitCode = 1;
+         }
       }
       catch (OperationCanceledException)
       {
@@ -40,11 +46,18 @@ public sealed class WindowsBackgroundService(
       }
       catch (Exception ex)
       {
-         this.logger.LogError($"Exception in {nameof(WindowsBackgroundService)}: {ex}");
+         this.logger.LogError(ex, "Exception in {Class}", nameof(WindowsBackgroundService));
+
+         // a non-zero exit code lets Windows Service recovery options restart the service
+         Environment.ExitCode = 1;
+      }
+      finally
+      {
+         // whether the worker finished on its own (e.g. maximum iterations reached) or failed,
+         // stop the host; otherwise it would keep running as a zombie with nothing to do
+         this.appLifetime.StopApplication();
       }
 
-      this.logger.LogInformation($"Ending {nameof(WindowsBackgroundService)}.{nameof(this.ExecuteAsync)}");
-
-      return;
+      this.logger.LogInformation("Ending {Class}.{Method}", nameof(WindowsBackgroundService), nameof(this.ExecuteAsync));
    }
 }

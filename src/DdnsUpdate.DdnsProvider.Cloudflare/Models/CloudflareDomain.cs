@@ -9,48 +9,55 @@
 namespace DdnsUpdate.DdnsProvider.Cloudflare.Models;
 
 /// <summary>
-/// A class representing a domain configuration to be used with a DDNS
-/// provider.
+/// One Cloudflare DNS record to keep updated. Empty values (other than the name and record id)
+/// fall back to <see cref="CloudflareSettings.DefaultDomain"/>.
 /// </summary>
 public class CloudflareDomain
 {
    /// <summary>
-   /// Gets or sets the value indicating whether the domain DDNS should be updated.
+   /// Gets or sets a value indicating whether the domain DDNS should be updated.
    /// </summary>
    public bool IsEnabled { get; set; }
 
    /// <summary>
-   /// Gets or sets the domain name (e.g mycompany.com).
+   /// Gets or sets the DNS record name (e.g. mycompany.com or home.mycompany.com).
    /// </summary>
    public string Name { get; set; }
 
    /// <summary>
-   /// Gets or sets the Cloudflare DNS zone id.
+   /// Gets or sets the Cloudflare zone id, shown on the domain's Overview page.
    /// </summary>
    public string ZoneId { get; set; }
 
    /// <summary>
-   /// Gets or sets the Cloudflare DNS record type.
+   /// Gets or sets the Cloudflare DNS record id. It is not shown in the dashboard; see the
+   /// README for how to look it up through the API.
    /// </summary>
    public string RecordId { get; set; }
 
    /// <summary>
-   /// Gets or sets the Cloudflare DNS record type.
+   /// Gets or sets the Cloudflare DNS record type (normally "A").
    /// </summary>
    public string RecordType { get; set; }
 
    /// <summary>
-   /// Gets or sets the Cloudflare account authorization key.
+   /// Gets or sets a Cloudflare API token (recommended). When set, it is used instead of the
+   /// Global API Key and email.
+   /// </summary>
+   public string ApiToken { get; set; }
+
+   /// <summary>
+   /// Gets or sets the Cloudflare Global API Key (legacy; used when no API token is set).
    /// </summary>
    public string AuthorizationKey { get; set; }
 
    /// <summary>
-   /// Gets or sets the Cloudflare account authorization email.
+   /// Gets or sets the email address of the Cloudflare account that owns the API key.
    /// </summary>
    public string AuthorizationEmail { get; set; }
 
    /// <summary>
-   /// Creates a new instance of the <see cref="CloudflareDomain"/> class.
+   /// Initializes a new instance of the <see cref="CloudflareDomain"/> class.
    /// </summary>
    public CloudflareDomain()
    {
@@ -58,6 +65,7 @@ public class CloudflareDomain
       this.ZoneId = string.Empty;
       this.RecordId = string.Empty;
       this.RecordType = string.Empty;
+      this.ApiToken = string.Empty;
       this.AuthorizationKey = string.Empty;
       this.AuthorizationEmail = string.Empty;
    }

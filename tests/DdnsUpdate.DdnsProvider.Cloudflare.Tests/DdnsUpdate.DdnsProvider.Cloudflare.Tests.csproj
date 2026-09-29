@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DdnsUpdate.DdnsProvider.Cloudflare\DdnsUpdate.DdnsProvider.Cloudflare.csproj" />
+  </ItemGroup>
+</Project>

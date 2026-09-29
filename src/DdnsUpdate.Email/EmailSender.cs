@@ -8,73 +8,108 @@
 
 namespace DdnsUpdate.Email;
 
-using System.Net;
-using System.Net.Mail;
-using System.Text;
 using DdnsUpdate.Core.Interfaces;
 using DdnsUpdate.Core.Models;
+using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.Extensions.Options;
+using MimeKit;
 
-public class EmailSender(
-   IOptions<ApplicationSettings> appSettings)
+/// <summary>
+/// An <see cref="IEmailSender"/> that sends through the SMTP server configured in
+/// <c>applicationSettings.emailSmtpSettings</c>, using MailKit.
+/// </summary>
+/// <remarks>
+/// MailKit replaces System.Net.Mail.SmtpClient, which Microsoft no longer recommends because it
+/// does not support modern protocols such as implicit TLS on port 465.
+/// </remarks>
+public sealed class EmailSender(
+   IOptionsMonitor<ApplicationSettings> appSettingsMonitor)
    : IEmailSender
 {
-   private readonly ApplicationSettings appSettings = appSettings.Value;
+   // the implicit-TLS SMTP port; every other port negotiates TLS with STARTTLS
+   private const int ImplicitTlsPort = 465;
 
+   // a monitor rather than IOptions so SMTP settings edits apply without a restart
+   private readonly IOptionsMonitor<ApplicationSettings> appSettingsMonitor = appSettingsMonitor;
+
+   /// <inheritdoc/>
    public async Task SendPlainAsync(
       string from,
       string to,
       string subject,
       string body)
    {
-      await this.SendAsync(from, to, subject, bodyPlain: body, bodyHtml: null, replyTo: null);
+      await this.SendAsync(from, to, subject, replyTo: null, bodyText: body, bodyHtml: null);
    }
 
+   /// <inheritdoc/>
    public async Task SendHtmlAsync(
       string from,
       string to,
       string subject,
       string body)
    {
-      await this.SendAsync(from, to, subject, bodyPlain: null, bodyHtml: body, replyTo: null);
+      await this.SendAsync(from, to, subject, replyTo: null, bodyText: null, bodyHtml: body);
    }
 
+   /// <inheritdoc/>
    public async Task SendAsync(
       string from,
       string to,
       string subject,
-      string? bodyPlain = null,
-      string? bodyHtml = null,
-      string? replyTo = null)
+      string? replyTo = null,
+      string? bodyText = null,
+      string? bodyHtml = null)
    {
-      using var message = new MailMessage();
-      message.SubjectEncoding = System.Text.Encoding.UTF8;
-      message.From = new MailAddress(from ?? throw new ArgumentNullException(nameof(from)));
-      message.To.Add(to ?? throw new ArgumentNullException(nameof(to)));
-      message.Body = bodyPlain ?? string.Empty; // blank body text if none provided
-      message.Subject = subject ?? throw new ArgumentNullException(nameof(subject));
+      ArgumentNullException.ThrowIfNull(from);
+      ArgumentNullException.ThrowIfNull(to);
+      ArgumentNullException.ThrowIfNull(subject);
+
+      using var message = new MimeMessage();
+
+      // Parse accepts both "user@example.com" and "Display Name <user@example.com>"
+      message.From.Add(MailboxAddress.Parse(from));
+      message.To.Add(MailboxAddress.Parse(to));
+      message.Subject = subject;
 
       // do we have a reply to email address
       if (replyTo is not null)
       {
-         message.ReplyToList.Add(replyTo);
+         message.ReplyTo.Add(MailboxAddress.Parse(replyTo));
       }
 
-      // html version
-      if (bodyHtml is not null)
+      // with both bodies, clients that can't render HTML fall back to the text
+      var bodyBuilder = new BodyBuilder
       {
-         var htmlView = AlternateView.CreateAlternateViewFromString(bodyHtml, Encoding.UTF8, "text/html");
-         message.AlternateViews.Add(htmlView);
-      }
+         TextBody = bodyText ?? (bodyHtml is null ? string.Empty : null),
+         HtmlBody = bodyHtml,
+      };
+      message.Body = bodyBuilder.ToMessageBody();
 
-      using var client = new SmtpClient(this.appSettings.EmailSmtpSettings.SmtpHost, this.appSettings.EmailSmtpSettings.SmtpPort);
-      client.EnableSsl = this.appSettings.EmailSmtpSettings.SmtpEnableSsl;
-      client.UseDefaultCredentials = string.IsNullOrWhiteSpace(this.appSettings.EmailSmtpSettings.SmtpUsername);
-      if (!client.UseDefaultCredentials)
+      EmailSmtpSettings smtp = this.appSettingsMonitor.CurrentValue.EmailSmtpSettings;
+
+      // smtpEnableSsl keeps its SmtpClient meaning (STARTTLS) and adds implicit TLS on port 465;
+      // with it off the connection is unencrypted, as before
+      SecureSocketOptions socketOptions = !smtp.SmtpEnableSsl
+         ? SecureSocketOptions.None
+         : smtp.SmtpPort == ImplicitTlsPort
+            ? SecureSocketOptions.SslOnConnect
+            : SecureSocketOptions.StartTls;
+
+      using var client = new SmtpClient();
+      string host = string.IsNullOrWhiteSpace(smtp.SmtpHost)
+         ? throw new InvalidOperationException("applicationSettings.emailSmtpSettings.smtpHost is empty")
+         : smtp.SmtpHost;
+      await client.ConnectAsync(host, smtp.SmtpPort, socketOptions);
+
+      // no username means an unauthenticated server (e.g. Papercut-SMTP on localhost)
+      if (!string.IsNullOrWhiteSpace(smtp.SmtpUsername))
       {
-         client.Credentials = new NetworkCredential(this.appSettings.EmailSmtpSettings.SmtpUsername, this.appSettings.EmailSmtpSettings.SmtpPassword);
+         await client.AuthenticateAsync(smtp.SmtpUsername, smtp.SmtpPassword ?? string.Empty);
       }
 
-      await client.SendMailAsync(message);
+      _ = await client.SendAsync(message);
+      await client.DisconnectAsync(quit: true);
    }
 }

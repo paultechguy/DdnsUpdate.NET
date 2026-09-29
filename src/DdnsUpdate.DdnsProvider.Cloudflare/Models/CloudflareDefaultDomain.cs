@@ -9,14 +9,13 @@
 namespace DdnsUpdate.DdnsProvider.Cloudflare.Models;
 
 /// <summary>
-/// A class representing a default domain configuration to be used with a DDNS
-/// provider.  Values from this class are used when a instance of a
-/// <see cref="CloudflareDomain"/> object has missing properties.
+/// Fallback values for any <see cref="CloudflareDomain"/> property left empty, so shared values
+/// such as the API credentials only need to be entered once.
 /// </summary>
 public class CloudflareDefaultDomain
 {
    /// <summary>
-   /// Gets or sets the default Cloudflare DNS zone id.
+   /// Gets or sets the default Cloudflare zone id.
    /// </summary>
    public string ZoneId { get; set; }
 
@@ -26,22 +25,28 @@ public class CloudflareDefaultDomain
    public string RecordType { get; set; }
 
    /// <summary>
-   /// Gets or sets the default Cloudflare account authorization key.
+   /// Gets or sets the default Cloudflare API token (recommended).
+   /// </summary>
+   public string ApiToken { get; set; }
+
+   /// <summary>
+   /// Gets or sets the default Cloudflare Global API Key (legacy).
    /// </summary>
    public string AuthorizationKey { get; set; }
 
    /// <summary>
-   /// Gets or sets the default Cloudflare account authorization email.
+   /// Gets or sets the default Cloudflare account email address.
    /// </summary>
    public string AuthorizationEmail { get; set; }
 
    /// <summary>
-   /// Creates a new instance of the <see cref="CloudflareDefaultDomain"/> class.
+   /// Initializes a new instance of the <see cref="CloudflareDefaultDomain"/> class.
    /// </summary>
    public CloudflareDefaultDomain()
    {
       this.ZoneId = string.Empty;
       this.RecordType = string.Empty;
+      this.ApiToken = string.Empty;
       this.AuthorizationKey = string.Empty;
       this.AuthorizationEmail = string.Empty;
    }

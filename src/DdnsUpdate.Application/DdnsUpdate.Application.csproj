@@ -1,31 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- Shared settings (nullable, version, StyleCop, etc.) come from Directory.Build.props. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <Version>0.1.0</Version>
-    <AssemblyName>DdnsUpdate</AssemblyName>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <AssemblyName>DdnsUpdate</AssemblyName>
     <StartupObject>DdnsUpdate.Application.Program</StartupObject>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="CommandLineParser" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="Microsoft.Extensions.Http" />
-    <PackageReference Include="Microsoft.Extensions.Logging" />
-    <PackageReference Include="Serilog.Enrichers.Environment" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
-    <PackageReference Include="Serilog.Settings.Configuration" />
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="Serilog.Sinks.File" />
-    <PackageReference Include="StyleCop.Analyzers">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DdnsUpdate.Core\DdnsUpdate.Core.csproj" />
@@ -38,6 +27,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+  <!-- the build type picks the environment: Program detects it from which appsettings file exists -->
   <Choose>
     <When Condition="'$(Configuration)'=='Debug'">
       <ItemGroup>

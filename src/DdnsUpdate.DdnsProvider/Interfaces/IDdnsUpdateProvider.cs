@@ -12,43 +12,58 @@ using System.Threading.Tasks;
 using DdnsUpdate.DdnsProvider.Models;
 
 /// <summary>
-/// An interface representing the contract for a DDNS provided that updates domain
-/// DNS records.
+/// The contract for a DDNS provider that updates domain DNS records with an IP address.
 /// </summary>
+/// <remarks>
+/// Each update pass calls <see cref="GetDomainNamesAsync"/> first, then, for each domain,
+/// <see cref="IsDomainValidAsync(string)"/> followed by
+/// <see cref="TryUpdateIpAddressAsync(string, string, CancellationToken)"/>. Domain updates may
+/// run in parallel. Providers read their own configuration section and own their HTTP clients,
+/// and should be registered through an IServiceCollection extension in the provider's project.
+/// </remarks>
 public interface IDdnsUpdateProvider
 {
    /// <summary>
-   /// The text name of the DDNS provider that provides IP address updates.
+   /// Gets the display name of the DDNS provider.
    /// </summary>
    public string ProviderName { get; }
 
    /// <summary>
-   /// Get all the domain names that need a DNS update using the latest IP address.
+   /// Gets the names of all enabled domains to update with the latest IP address.
    /// </summary>
-   /// <returns>A <see cref="List"/> of string domain names.</returns>
+   /// <returns>A <see cref="List{T}"/> of domain names.</returns>
    Task<List<string>> GetDomainNamesAsync();
 
    /// <summary>
-   /// Determines if the domain referred to by domainName, is valid for just prior
-   /// IP address to be updated.  This method can perform any internal configuration for
-   /// the domain.  This method is called prior to
-   /// <see cref="TryUpdateIpAddressAsync(HttpClient, string, string)"/> for each domain
-   /// to be updated.
+   /// Determines whether the domain is configured well enough to be updated. This method can
+   /// also perform any internal configuration for the domain.
    /// </summary>
    /// <param name="domainName">The domain name to validate.</param>
-   /// <returns><see cref="DdnsProviderSuccessResult"/>.</returns>
+   /// <returns>A <see cref="DdnsProviderSuccessResult"/> whose message lists any problems.</returns>
    Task<DdnsProviderSuccessResult> IsDomainValidAsync(string domainName);
 
    /// <summary>
-   /// Using the client, update the DNS for domainName with the specified ipAddress.
+   /// Reads the domain's DNS record without changing it. Used by dry runs to prove the
+   /// credentials and record identifiers work before anything is updated.
    /// </summary>
-   /// <param name="client"><see cref="HttpClient"/>. Do not Dispose of the client; it will be
-   /// done for you.</param>
-   /// <param name="domainName">The domain name to have a DNS updated (e.g. mycompany.com).</param>
-   /// <param name="ipAddress">The IP address to use for a DNS update.</param>
-   /// <returns><see cref="DdnsProviderSuccessResult"/>.</returns>
-   Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(
-      HttpClient client,
+   /// <param name="domainName">The domain name whose DNS record is read.</param>
+   /// <param name="cancelToken">Signaled when the application is stopping.</param>
+   /// <returns>A <see cref="DdnsProviderRecordResult"/> with the record's current value, or a
+   /// failure describing why the record could not be read or does not match the domain.</returns>
+   Task<DdnsProviderRecordResult> GetDnsRecordAsync(
       string domainName,
-      string ipAddress);
+      CancellationToken cancelToken = default);
+
+   /// <summary>
+   /// Updates the DNS record for the domain with the specified IP address.
+   /// </summary>
+   /// <param name="domainName">The domain name whose DNS record is updated (e.g. mycompany.com).</param>
+   /// <param name="ipAddress">The IP address to use for the DNS update.</param>
+   /// <param name="cancelToken">Signaled when the application is stopping.</param>
+   /// <returns>A <see cref="DdnsProviderSuccessResult"/>; failures are reported here rather
+   /// than thrown.</returns>
+   Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(
+      string domainName,
+      string ipAddress,
+      CancellationToken cancelToken = default);
 }

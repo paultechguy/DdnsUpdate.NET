@@ -5,36 +5,51 @@ deploy it.
 
 ## What this tree is
 
-This is the `v0.1.0` line (tag `e2252fd`, 2024-02-23), which is what production
-runs. Settings files sit **flat** beside the executable. There is no `config`
-subfolder anywhere in this version, and the code has no concept of one:
-`Program.cs` sets the current directory to the executable directory and reads
-`.\appsettings.*.json` from there.
+This line descends from `v0.1.0` (tag `e2252fd`, 2024-02-23), the version
+production runs, and is now version `0.2.0` (see `CHANGELOG.md`). Settings files
+sit **flat** beside the executable. There is no `config` subfolder anywhere in
+this line, and the code has no concept of one: `Program.cs` sets the current
+directory to the executable directory and reads `.\appsettings.*.json` from
+there. Version 0.2.0 reads the same settings files as 0.1.0, so upgrading means
+replacing only `DdnsUpdate.exe`.
 
 Do not confuse this with the `master` line in the same GitHub repository. That
 is an unrelated history with no common ancestor, it reads settings from a
 `config` subfolder, and it names its executable `ddnsupdate.exe` in lowercase.
-Both report version `0.1.0`, so the version string cannot tell them apart. Use
-the settings location or the executable name casing instead.
+It also reports version `0.1.0`, so a `0.1.0` build cannot be told apart by its
+version string. Use the settings location or the executable name casing instead.
 
 ## Prerequisites
 
-.NET SDK 8.0 or later. The projects target `net8.0`; a newer SDK builds them
-fine. All packages resolve from nuget.org.
+.NET SDK 10.0 (pinned by `global.json`, which allows any later 10.0 feature
+band). The libraries target `net10.0` and the executable targets
+`net10.0-windows10.0.17763.0`. All packages resolve from nuget.org, with versions
+managed centrally in `Directory.Packages.props`.
 
 ## Build
 
-Open `src\DdnsUpdate.sln` in Visual Studio, or from the repository root:
+Open `DdnsUpdate.slnx` (repository root) in Visual Studio, or from the
+repository root:
 
 ```powershell
-cd src
-dotnet publish .\DdnsUpdate.Application\DdnsUpdate.Application.csproj `
+dotnet build
+dotnet test
+dotnet publish src\DdnsUpdate.Application -p:PublishProfile=win-x64-single
+```
+
+The `win-x64-single` publish profile
+(`src\DdnsUpdate.Application\Properties\PublishProfiles\win-x64-single.pubxml`)
+sets Release, `win-x64`, self-contained, single file, and the `publish` output
+folder at the repository root. It is equivalent to:
+
+```powershell
+dotnet publish src\DdnsUpdate.Application\DdnsUpdate.Application.csproj `
   -c Release `
   -r win-x64 `
   --self-contained true `
   -p:PublishSingleFile=true `
   -p:IncludeNativeLibrariesForSelfExtract=true `
-  -o .\publish
+  -o publish
 ```
 
 `DdnsUpdate.Application.csproj` sets `<AssemblyName>DdnsUpdate</AssemblyName>`,
@@ -53,8 +68,8 @@ characters by default, and project references fail past that with a misleading
 
 | Option | Command change | Result |
 | --- | --- | --- |
-| Self-contained | as written above | About 70 MB. Runs with no .NET runtime installed. |
-| Framework-dependent | drop `--self-contained true` | A few MB. Requires the .NET 8 runtime on the target machine. |
+| Self-contained | as written above | About 100 MB. Runs with no .NET runtime installed. |
+| Framework-dependent | add `--self-contained false` (or edit the profile) | A few MB. Requires the .NET 10 runtime on the target machine. |
 
 Check the size of the executable already in production to see which was used
 last time. Either works.
@@ -99,6 +114,11 @@ address it skips every domain.
 To force real API calls, temporarily set `alwaysUpdateDdnsEvenIfUnchanged` to
 `true` under `applicationSettings.ddnsSettings`, run once, confirm every domain
 reports success, then set it back to `false`.
+
+The process exit code is 0 when a run finishes normally, including stopping
+after `maximumDdnsUpdateIterations`, and 1 when startup fails (for example an
+invalid `ipAddressProviders` URL) or the update loop throws. A Windows Service
+that exits with 1 triggers its configured recovery actions.
 
 For Cloudflare-proxied records, confirm afterwards that the orange cloud is
 still on. This version sends a PATCH so that omitted fields such as `proxied`
