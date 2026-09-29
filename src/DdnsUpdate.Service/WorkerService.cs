@@ -25,7 +25,7 @@ using Microsoft.Extensions.Options;
 /// </summary>
 /// <remarks>
 /// State that must survive restarts (the last known IP address and the per-URL IP provider
-/// statistics) is kept in <see cref="FilePathHelper.ApplicationDataDirectory"/>. Register with
+/// statistics) is kept in the <see cref="IDdnsStateStore"/>. Register with
 /// <see cref="WorkerServiceCollectionExtensions.AddDdnsUpdateWorker"/>.
 /// </remarks>
 public sealed partial class WorkerService(
@@ -34,6 +34,7 @@ public sealed partial class WorkerService(
    IEmailSender emailSender,
    IHttpClientFactory clientFactory,
    IDdnsUpdateProvider ddnsUpdateProvider,
+   IDdnsStateStore stateStore,
    TimeProvider timeProvider) : IWorkerService
 {
    /// <summary>
@@ -41,10 +42,8 @@ public sealed partial class WorkerService(
    /// </summary>
    public const string IpAddressHttpClientName = "IpAddressProvider";
 
-   private const string LastIpAddressFileName = "LastIpAddress.txt";
-   private const string UriStatisticsFileName = "UriStatistics.json";
-   private readonly string lastIPAddressFilePath = GetLastIpAddressFilePath();
    private readonly IOptionsMonitor<ApplicationSettings> appSettingsMonitor = appSettingsMonitor;
+   private readonly IDdnsStateStore stateStore = stateStore;
    private readonly ILogger<WorkerService> logger = logger;
    private readonly IHttpClientFactory clientFactory = clientFactory;
    private readonly IEmailSender emailSender = emailSender;
@@ -117,7 +116,7 @@ public sealed partial class WorkerService(
 
       // get new and last known ip addresses
       (string ip, UriStatisticItem? statsItem) = await this.GetIpAddressV4Async(cancelToken);
-      string lastIpAddress = this.LoadLastIpAddress();
+      string lastIpAddress = this.stateStore.LoadLastIpAddress();
 
       if (string.IsNullOrWhiteSpace(ip) || statsItem is null)
       {
@@ -136,7 +135,7 @@ public sealed partial class WorkerService(
       {
          this.logger.LogInformation("New IP address found: {IpAddress}", ip);
          await this.SendEmailIpAddressChangedAsync(lastIpAddress, ip, cancelToken); // optional based on config
-         this.SaveLastIpAddress(ip);
+         this.stateStore.SaveLastIpAddress(ip);
       }
 
       this.logger.LogInformation("#{LoopCounter}: Current external IP is {IpAddress} via URL {ProviderUri}", loopCounter, ip, statsItem.Uri.ToString());
@@ -385,22 +384,9 @@ public sealed partial class WorkerService(
       }
    }
 
-   private string LoadLastIpAddress()
-   {
-      return File.Exists(this.lastIPAddressFilePath) ? File.ReadAllText(this.lastIPAddressFilePath) : string.Empty;
-   }
-
-   private void SaveLastIpAddress(string ipAddress)
-   {
-      string folder = Path.GetDirectoryName(this.lastIPAddressFilePath) ?? throw new InvalidOperationException(nameof(this.lastIPAddressFilePath));
-      _ = Directory.CreateDirectory(folder);
-
-      File.WriteAllText(this.lastIPAddressFilePath, ipAddress);
-   }
-
    private void LogInitialIpAddress()
    {
-      string lastIpAddress = this.LoadLastIpAddress();
+      string lastIpAddress = this.stateStore.LoadLastIpAddress();
       string message = string.IsNullOrWhiteSpace(lastIpAddress)
          ? "none found"
          : lastIpAddress;
@@ -421,38 +407,24 @@ public sealed partial class WorkerService(
    {
       try
       {
-         await this.uriStatistics.WriteFileAsync(GetUriStatisticsFilePath());
+         await this.stateStore.SaveUriStatisticsAsync(this.uriStatistics);
       }
       catch (Exception ex)
       {
          // not critical; the counts stay in memory and the next successful lookup saves them
          // (a common cause is an editor holding the file open)
-         this.logger.LogWarning("Unable to save {File}; will try again next iteration  ({Reason})", UriStatisticsFileName, ex.Message);
+         this.logger.LogWarning("Unable to save IP address provider statistics; will try again next iteration  ({Reason})", ex.Message);
       }
    }
 
    private async Task LoadUriStatisticsAsync()
    {
-      string filePath = GetUriStatisticsFilePath();
-      if (Path.Exists(filePath))
-      {
-         // load existing uris with their stats
-         this.uriStatistics = await UriStatistics.ReadFileAsync(filePath);
-      }
+      // load existing uris with their stats
+      this.uriStatistics = await this.stateStore.LoadUriStatisticsAsync();
 
-      // add any providers configured since the stats file was written; providers removed
-      // from the settings remain in the file and are still used
+      // add any providers configured since the stats were saved; providers removed from the
+      // settings remain in the saved stats and are still used
       this.uriStatistics.Merge(this.appSettings.DdnsSettings.IpAddressProviders);
-   }
-
-   private static string GetLastIpAddressFilePath()
-   {
-      return Path.Combine(FilePathHelper.ApplicationDataDirectory, LastIpAddressFileName);
-   }
-
-   private static string GetUriStatisticsFilePath()
-   {
-      return Path.Combine(FilePathHelper.ApplicationDataDirectory, UriStatisticsFileName);
    }
 
    // finds the first dotted-quad in a provider's response; IPAddress.TryParse validates it

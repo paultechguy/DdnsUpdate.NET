@@ -25,7 +25,12 @@ public class CloudflareDefaultDomain
    public string RecordType { get; set; }
 
    /// <summary>
-   /// Gets or sets the default Cloudflare Global API Key.
+   /// Gets or sets the default Cloudflare API token (recommended).
+   /// </summary>
+   public string ApiToken { get; set; }
+
+   /// <summary>
+   /// Gets or sets the default Cloudflare Global API Key (legacy).
    /// </summary>
    public string AuthorizationKey { get; set; }
 
@@ -41,6 +46,7 @@ public class CloudflareDefaultDomain
    {
       this.ZoneId = string.Empty;
       this.RecordType = string.Empty;
+      this.ApiToken = string.Empty;
       this.AuthorizationKey = string.Empty;
       this.AuthorizationEmail = string.Empty;
    }

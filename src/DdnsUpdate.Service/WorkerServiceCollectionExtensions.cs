@@ -19,7 +19,8 @@ public static class WorkerServiceCollectionExtensions
 {
    /// <summary>
    /// Registers <see cref="WorkerService"/> as the <see cref="IWorkerService"/>, its HTTP client
-   /// for the IP address providers, and the system <see cref="TimeProvider"/>. The host must also
+   /// for the IP address providers, the file-based <see cref="IDdnsStateStore"/>, and the system
+   /// <see cref="TimeProvider"/>. The host must also
    /// configure the <c>ApplicationSettings</c> options and register an <c>IEmailSender</c> and
    /// an <c>IDdnsUpdateProvider</c>.
    /// </summary>
@@ -34,6 +35,7 @@ public static class WorkerServiceCollectionExtensions
       });
 
       services.TryAddSingleton(TimeProvider.System);
+      services.TryAddSingleton<IDdnsStateStore, FileDdnsStateStore>();
       _ = services.AddTransient<IWorkerService, WorkerService>();
 
       return services;

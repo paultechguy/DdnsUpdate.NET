@@ -11,6 +11,7 @@ namespace DdnsUpdate.DdnsProvider.Cloudflare;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using DdnsUpdate.DdnsProvider.Cloudflare.Models;
@@ -23,9 +24,10 @@ using Microsoft.Extensions.Options;
 /// using the domains in the <c>cloudflareSettings</c> configuration section.
 /// </summary>
 /// <remarks>
-/// Any empty per-domain value (zone id, record type, authorization key or email) falls back to
-/// the value in <c>cloudflareSettings.defaultDomain</c>. Register with
-/// <see cref="CloudflareServiceCollectionExtensions.AddCloudflareDdnsProvider"/>.
+/// Any empty per-domain value (zone id, record type, credentials) falls back to the value in
+/// <c>cloudflareSettings.defaultDomain</c>. For credentials, a domain's own API token or Global
+/// API Key wins over the defaults, and at either level an API token wins over a key.
+/// Register with <see cref="CloudflareServiceCollectionExtensions.AddCloudflareDdnsProvider"/>.
 /// </remarks>
 public sealed class DdnsUpdateProvider(
    IOptionsMonitor<CloudflareSettings> settingsMonitor,
@@ -84,14 +86,18 @@ public sealed class DdnsUpdateProvider(
          errorList.Add("recordType is empty in both the domain and defaultDomain");
       }
 
-      if (string.IsNullOrWhiteSpace(this.GetSettingsAuthorizationKey(domain)))
+      // either an API token, or a Global API Key plus its account email
+      Credentials credentials = this.GetSettingsCredentials(domain);
+      if (string.IsNullOrWhiteSpace(credentials.ApiToken))
       {
-         errorList.Add("authorizationKey is empty in both the domain and defaultDomain");
-      }
-
-      if (string.IsNullOrWhiteSpace(this.GetSettingsAuthorizationEmail(domain)))
-      {
-         errorList.Add("authorizationEmail is empty in both the domain and defaultDomain");
+         if (string.IsNullOrWhiteSpace(credentials.AuthorizationKey))
+         {
+            errorList.Add("apiToken and authorizationKey are empty in both the domain and defaultDomain");
+         }
+         else if (string.IsNullOrWhiteSpace(credentials.AuthorizationEmail))
+         {
+            errorList.Add("authorizationEmail is empty in both the domain and defaultDomain");
+         }
       }
 
       if (string.IsNullOrWhiteSpace(this.GetSettingsZoneId(domain)))
@@ -122,10 +128,18 @@ public sealed class DdnsUpdateProvider(
          string zoneId = this.GetSettingsZoneId(domain);
          using var request = new HttpRequestMessage(HttpMethod.Patch, $"zones/{zoneId}/dns_records/{domain.RecordId}");
 
-         // Global API Key authentication; headers go on the request, not the client, because
-         // domains are updated in parallel and may use different credentials
-         request.Headers.Add("X-Auth-Email", this.GetSettingsAuthorizationEmail(domain));
-         request.Headers.Add("X-Auth-Key", this.GetSettingsAuthorizationKey(domain));
+         // headers go on the request, not the client, because domains are updated in parallel
+         // and may use different credentials
+         Credentials credentials = this.GetSettingsCredentials(domain);
+         if (!string.IsNullOrWhiteSpace(credentials.ApiToken))
+         {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.ApiToken);
+         }
+         else
+         {
+            request.Headers.Add("X-Auth-Email", credentials.AuthorizationEmail);
+            request.Headers.Add("X-Auth-Key", credentials.AuthorizationKey);
+         }
 
          // Use PATCH, not PUT.  PUT is an overwrite: Cloudflare resets any field we omit
          // back to its default, which silently turns off the proxy (proxied=false) on
@@ -164,14 +178,29 @@ public sealed class DdnsUpdateProvider(
          .FirstOrDefault(x => domainName.Equals(x.Name, StringComparison.OrdinalIgnoreCase));
    }
 
-   private string GetSettingsAuthorizationEmail(CloudflareDomain domain)
+   private Credentials GetSettingsCredentials(CloudflareDomain domain)
    {
-      return string.IsNullOrWhiteSpace(domain.AuthorizationEmail) ? this.applicationSettings.DefaultDomain.AuthorizationEmail : domain.AuthorizationEmail;
-   }
+      CloudflareDefaultDomain defaults = this.applicationSettings.DefaultDomain;
+      string email = string.IsNullOrWhiteSpace(domain.AuthorizationEmail) ? defaults.AuthorizationEmail : domain.AuthorizationEmail;
 
-   private string GetSettingsAuthorizationKey(CloudflareDomain domain)
-   {
-      return string.IsNullOrWhiteSpace(domain.AuthorizationKey) ? this.applicationSettings.DefaultDomain.AuthorizationKey : domain.AuthorizationKey;
+      // a domain's own credentials beat the defaults, so one domain can use a different
+      // account; at each level a (scoped) API token beats the (all-powerful) Global API Key
+      if (!string.IsNullOrWhiteSpace(domain.ApiToken))
+      {
+         return new Credentials(domain.ApiToken, string.Empty, string.Empty);
+      }
+
+      if (!string.IsNullOrWhiteSpace(domain.AuthorizationKey))
+      {
+         return new Credentials(string.Empty, domain.AuthorizationKey, email);
+      }
+
+      if (!string.IsNullOrWhiteSpace(defaults.ApiToken))
+      {
+         return new Credentials(defaults.ApiToken, string.Empty, string.Empty);
+      }
+
+      return new Credentials(string.Empty, defaults.AuthorizationKey, email);
    }
 
    private string GetSettingsRecordType(CloudflareDomain domain)
@@ -183,4 +212,9 @@ public sealed class DdnsUpdateProvider(
    {
       return string.IsNullOrWhiteSpace(domain.ZoneId) ? this.applicationSettings.DefaultDomain.ZoneId : domain.ZoneId;
    }
+
+   /// <summary>
+   /// The resolved credentials for one domain: either an API token, or a Global API Key and email.
+   /// </summary>
+   private sealed record Credentials(string ApiToken, string AuthorizationKey, string AuthorizationEmail);
 }

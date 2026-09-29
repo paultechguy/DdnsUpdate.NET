@@ -41,7 +41,13 @@ public class CloudflareDomain
    public string RecordType { get; set; }
 
    /// <summary>
-   /// Gets or sets the Cloudflare Global API Key.
+   /// Gets or sets a Cloudflare API token (recommended). When set, it is used instead of the
+   /// Global API Key and email.
+   /// </summary>
+   public string ApiToken { get; set; }
+
+   /// <summary>
+   /// Gets or sets the Cloudflare Global API Key (legacy; used when no API token is set).
    /// </summary>
    public string AuthorizationKey { get; set; }
 
@@ -59,6 +65,7 @@ public class CloudflareDomain
       this.ZoneId = string.Empty;
       this.RecordId = string.Empty;
       this.RecordType = string.Empty;
+      this.ApiToken = string.Empty;
       this.AuthorizationKey = string.Empty;
       this.AuthorizationEmail = string.Empty;
    }
