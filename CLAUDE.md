@@ -39,11 +39,12 @@ Tests use xUnit v3 on Microsoft Testing Platform (opted in via `global.json`'s `
 - `WorkerService` tests use in-memory fakes (`tests/DdnsUpdate.Service.Tests/Fakes.cs`) and a `FakeTimeProvider`, so they never touch ProgramData or the network. Tests with `maximumDdnsUpdateIterations = 1` never advance the clock, so they would hang if the worker waited before exiting.
 - Run one test with `dotnet test --project tests\DdnsUpdate.Service.Tests -- --filter-method "*UnchangedIp_SkipsUpdates"`.
 - Pass `TestContext.Current.CancellationToken` to anything that takes a token. xUnit1051 warns otherwise.
-- To smoke-test a single pass, set the environment variable `applicationSettings__ddnsSettings__maximumDdnsUpdateIterations=1` and run the Debug exe.
-  - Without it, the app sleeps 60 minutes between passes.
-  - Don't pass settings as command-line arguments. CommandLineParser rejects unknown arguments, and the app then exits with code 1 without running.
-  - Environment variables can also enable a fake domain, e.g. `cloudflareSettings__domains__0__isEnabled=true`. Leaving its IDs empty makes validation fail before any Cloudflare call.
-  - A run writes to `%ProgramData%\PaulTechGuy\DdnsUpdate`.
+- To smoke-test the Debug exe, run it with `--dry-run` or `--once` (defined in `CommandLineOptions`).
+  - `--dry-run` is one read-only pass. It detects the IP, validates each domain, and calls `GetDnsRecordAsync` (a Cloudflare GET) to prove the credentials and IDs. It never PATCHes, saves state, or emails, and it exits with 1 if any domain has a problem.
+  - `--once` is one real pass. Without either option, the app sleeps 60 minutes between passes.
+  - Don't pass settings as command-line arguments. CommandLineParser rejects unknown arguments, and the app then exits with code 1 without running. Use environment variables instead, e.g. `cloudflareSettings__domains__0__isEnabled=true` to enable a fake domain.
+  - A run writes logs to `%ProgramData%\PaulTechGuy\DdnsUpdate`. A dry run writes only logs there.
+- The public site is `docs/index.html` (plus `docs/assets/`, `docs/sitemap.xml` and `docs/.nojekyll`), served by GitHub Pages from `master:/docs`. It is static HTML/CSS with no build step. Keep its claims in step with the README.
 - The publish must be single-file. `FilePathHelper` and `Program.Main` use `AppDomain.CurrentDomain.BaseDirectory` because `Assembly.Location` is empty in a bundle.
 - Building from a deeply nested path can hit the 260-character limit. That shows up as a misleading `MSB9008` "referenced project does not exist" warning.
 

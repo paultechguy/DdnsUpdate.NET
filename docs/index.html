@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DdnsUpdate — dynamic DNS for Cloudflare, on Windows</title>
+<meta name="description" content="DdnsUpdate keeps your Cloudflare DNS records pointed at your home or office, even when your ISP changes your public IP address. A single Windows executable that runs as a service or a scheduled task. Free and open source.">
+<link rel="canonical" href="https://paultechguy.github.io/DdnsUpdate.NET/">
+<meta property="og:title" content="DdnsUpdate">
+<meta property="og:description" content="Your IP address changes. Your Cloudflare DNS keeps up. Dynamic DNS for Windows, with nothing to babysit.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://paultechguy.github.io/DdnsUpdate.NET/">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#f3f5f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1017" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/svg+xml" href="assets/ddnsupdate-logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper: #f3f5f8;
+    --paper-deep: #e7ebf1;
+    --card: #ffffff;
+    --ink: #0f1722;
+    --ink-soft: #4a5566;
+    --accent: #1f5fbf;
+    --signal: #b04e0a;
+    --signal-bright: #e8731a;
+    --ok: #17804f;
+    --btn-bg: #c2570c;
+    --btn-ink: #ffffff;
+    --line: #cfd6e0;
+    --grid-dot: rgba(15,23,34,0.09);
+    --shadow: 0 1px 2px rgba(15,23,34,0.06), 0 12px 32px -12px rgba(15,23,34,0.18);
+    --display: 'Space Grotesk', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+    --body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper: #0b1017; --paper-deep: #111823; --card: #131c28; --ink: #e6ecf3; --ink-soft: #97a3b4;
+      --accent: #7fb0ff; --signal: #ff9a3d; --signal-bright: #ffab5c; --ok: #4cc38a;
+      --btn-bg: #ff9a3d; --btn-ink: #1a1005; --line: #1f2a38; --grid-dot: rgba(230,236,243,0.07);
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 16px 40px -16px rgba(0,0,0,0.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper: #0b1017; --paper-deep: #111823; --card: #131c28; --ink: #e6ecf3; --ink-soft: #97a3b4;
+    --accent: #7fb0ff; --signal: #ff9a3d; --signal-bright: #ffab5c; --ok: #4cc38a;
+    --btn-bg: #ff9a3d; --btn-ink: #1a1005; --line: #1f2a38; --grid-dot: rgba(230,236,243,0.07);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 16px 40px -16px rgba(0,0,0,0.7);
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce){ html{ scroll-behavior: auto; } }
+  body{
+    margin: 0; padding: 0 16px;
+    background-color: var(--paper);
+    background-image: radial-gradient(var(--grid-dot) 1px, transparent 1.2px);
+    background-size: 22px 22px;
+    color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3{ font-family: var(--display); color: var(--ink); text-wrap: balance; letter-spacing: -0.01em; }
+  p{ text-wrap: pretty; }
+  a{ color: var(--accent); }
+  code{ font-family: var(--mono); font-size: 0.88em; }
+  ::selection{ background: var(--signal-bright); color: #fff; }
+  .wrap{ max-width: 1080px; margin: 0 auto; }
+  .visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+  /* buttons */
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; font-family: var(--mono); font-weight: 500;
+    font-size: 0.84rem; letter-spacing: 0.01em; padding: 12px 20px; border-radius: 6px;
+    text-decoration: none; white-space: nowrap; border: 1px solid transparent; cursor: pointer;
+    transition: transform .15s ease, filter .15s ease, border-color .15s ease;
+  }
+  .btn-primary{ background: var(--btn-bg); color: var(--btn-ink); border-color: var(--btn-bg); }
+  .btn-primary:hover{ filter: brightness(1.06); transform: translateY(-1px); }
+  .btn-ghost{ background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover{ border-color: var(--ink-soft); }
+  .btn:focus-visible, .navlinks a:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn-sm{ font-size: 0.75rem; padding: 8px 14px; }
+
+  /* masthead */
+  .masthead{
+    display:flex; align-items:center; justify-content:space-between; gap: 14px; flex-wrap: wrap;
+    padding-block: 16px; border-bottom: 1px solid var(--line);
+  }
+  .brand{ display:flex; align-items:center; gap:10px; text-decoration:none; }
+  .brand svg{ width: 28px; height: 28px; display:block; }
+  .brand span{ font-family: var(--mono); font-weight: 600; font-size: 0.92rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); }
+  .navlinks{ display:flex; gap: 22px; font-family: var(--mono); font-size: 0.78rem; }
+  .navlinks a{ color: var(--ink-soft); text-decoration: none; }
+  .navlinks a:hover{ color: var(--ink); }
+  .nav-cta{ display:flex; gap:10px; align-items:center; }
+  @media (max-width: 860px){ .navlinks{ display:none; } }
+
+  /* hero */
+  .hero{ display:grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; padding-block: 64px 56px; }
+  .hero > *{ min-width: 0; }
+  @media (max-width: 900px){ .hero{ grid-template-columns: 1fr; gap: 36px; padding-block: 44px 40px; } }
+  .kicker{ font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin: 0 0 18px; }
+  h1{ font-size: clamp(2.3rem, 4.4vw + 1rem, 3.9rem); font-weight: 700; line-height: 1.02; margin: 0 0 22px; letter-spacing: -0.025em; }
+  h1 .shift{ color: var(--signal); }
+  .standfirst{ font-size: clamp(1.06rem, 0.7vw + 0.95rem, 1.22rem); line-height: 1.6; color: var(--ink-soft); max-width: 54ch; margin: 0 0 30px; }
+  .cta-row{ display:flex; gap: 12px; flex-wrap: wrap; align-items:center; margin-bottom: 16px; }
+  .cta-meta{ font-family: var(--mono); font-size: 0.74rem; color: var(--ink-soft); letter-spacing: 0.01em; margin: 0; }
+  .status-pill{
+    display:inline-flex; align-items:center; gap:8px; font-family: var(--mono); font-size: 0.72rem;
+    color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px 5px 10px;
+    background: var(--card); margin-bottom: 22px;
+  }
+  .status-pill .led{ width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+
+  /* hero visual */
+  .scene{ background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+  .scene-bar{ display:flex; align-items:center; gap:6px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--paper-deep); }
+  .scene-bar i{ width:9px; height:9px; border-radius:50%; background: var(--line); display:block; }
+  .scene-bar span{ margin-left: 8px; font-family: var(--mono); font-size: 0.7rem; color: var(--ink-soft); }
+  .scene svg{ display:block; width: 100%; height: auto; }
+  .scene .t-label{ font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; fill: var(--ink-soft); }
+  .scene .t-ip{ font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .scene .t-host{ font-family: var(--mono); font-size: 11.5px; fill: var(--ink); }
+  .scene .t-small{ font-family: var(--mono); font-size: 9.5px; fill: var(--ink-soft); }
+  .scene .t-verb{ font-family: var(--mono); font-size: 10px; font-weight: 600; fill: var(--signal); letter-spacing: 0.08em; }
+  .scene .box{ fill: var(--paper); stroke: var(--line); }
+  .scene .pill{ fill: var(--paper-deep); stroke: var(--line); }
+  .scene .ip-old{ fill: var(--ink-soft); }
+  .scene .ip-new{ fill: var(--ok); }
+  .scene .wire{ stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 5; fill: none; }
+  .scene .packet{ fill: var(--signal-bright); }
+  .scene .check circle{ fill: var(--ok); }
+  .scene .icon{ stroke: var(--accent); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .scene .badge{ fill: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .scene .badge-t{ font-family: var(--mono); font-size: 10px; font-weight: 600; fill: var(--accent); }
+  .scene .kept{ fill: var(--ok); }
+  /* static (reduced-motion) state: the finished update */
+  .scene .ip-old{ opacity: 0; }
+  .scene .packet{ opacity: 0; }
+
+  .log{ margin: 0; padding: 14px 16px 16px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 0.72rem; line-height: 1.75; color: var(--ink-soft); overflow-x: auto; }
+  .log div{ white-space: nowrap; }
+  .log .lvl{ color: var(--ok); }
+  .log .hl{ color: var(--ink); }
+
+  @media (prefers-reduced-motion: no-preference){
+    .hero-copy > *{ animation: rise .7s ease both; }
+    .hero-copy > :nth-child(2){ animation-delay: .05s; }
+    .hero-copy > :nth-child(3){ animation-delay: .1s; }
+    .hero-copy > :nth-child(4){ animation-delay: .15s; }
+    .hero-copy > :nth-child(5){ animation-delay: .2s; }
+    .scene{ animation: rise .8s .15s ease both; }
+    @keyframes rise{ from{ opacity:0; transform: translateY(12px);} to{ opacity:1; transform:none; } }
+
+    .scene .ip-old-l{ animation: oldL 9s infinite; }
+    .scene .ip-new-l{ animation: newL 9s infinite; }
+    .scene .packet{ animation: packet 9s infinite; }
+    .scene .ip-old-r{ animation: oldR 9s infinite; }
+    .scene .ip-new-r{ animation: newR 9s infinite; }
+    .scene .check{ animation: check 9s infinite; transform-origin: 432px 62px; }
+    @keyframes oldL{ 0%,18%{opacity:1} 24%,92%{opacity:0} 100%{opacity:1} }
+    @keyframes newL{ 0%,18%{opacity:0} 24%,92%{opacity:1} 100%{opacity:0} }
+    @keyframes packet{
+      0%,27%{ opacity:0; transform: translateX(0); }
+      30%{ opacity:1; transform: translateX(0); }
+      52%{ opacity:1; transform: translateX(132px); }
+      55%,100%{ opacity:0; transform: translateX(132px); }
+    }
+    @keyframes oldR{ 0%,53%{opacity:1} 59%,92%{opacity:0} 100%{opacity:1} }
+    @keyframes newR{ 0%,53%{opacity:0} 59%,92%{opacity:1} 100%{opacity:0} }
+    @keyframes check{ 0%,58%{opacity:0; transform: scale(.6)} 63%{opacity:1; transform: scale(1.08)} 66%,92%{opacity:1; transform: scale(1)} 100%{opacity:0} }
+
+    .log div{ animation: rise .5s ease both; }
+    .log div:nth-child(1){ animation-delay: .5s; }
+    .log div:nth-child(2){ animation-delay: .8s; }
+    .log div:nth-child(3){ animation-delay: 1.1s; }
+    .log div:nth-child(4){ animation-delay: 1.4s; }
+    .log div:nth-child(5){ animation-delay: 1.7s; }
+
+    .status-pill .led{ animation: pulse 2.4s ease-in-out infinite; }
+    @keyframes pulse{ 50%{ box-shadow: 0 0 0 6px color-mix(in srgb, var(--ok) 0%, transparent); } }
+  }
+
+  /* chapters */
+  .chapter{ display:flex; gap: 26px; padding-block: 56px; border-top: 1px solid var(--line); scroll-margin-top: 12px; }
+  .chapter-rail{ flex: 0 0 44px; padding-top: 4px; }
+  .chapter-num{ display:block; font-family: var(--mono); font-weight: 600; font-size: 1.4rem; color: var(--accent); line-height: 1; }
+  .chapter-label{ display:block; margin-top: 12px; font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em; color: var(--ink-soft); writing-mode: vertical-rl; transform: rotate(180deg); text-transform: uppercase; }
+  .chapter-body{ flex: 1 1 auto; min-width: 0; }
+  .chapter-body h2{ font-size: clamp(1.5rem, 1.6vw + 1rem, 2.1rem); font-weight: 600; line-height: 1.15; margin: 0 0 22px; max-width: 26ch; }
+  .chapter-body > p{ max-width: 66ch; margin: 0 0 20px; }
+  .chapter-body > p:last-child{ margin-bottom: 0; }
+
+  .note-row{ display:flex; gap: 36px; align-items: flex-start; margin-bottom: 20px; }
+  .note-row > p{ margin: 0; max-width: 62ch; }
+  .note-row > .margin-note{ flex: 0 0 230px; margin: 0; }
+  .margin-note{ font-family: var(--mono); font-size: 0.78rem; line-height: 1.6; color: var(--ink-soft); padding-left: 14px; border-left: 2px solid var(--signal); }
+  @media (max-width: 1000px){
+    .note-row{ flex-direction: column; gap: 10px; }
+    .note-row > .margin-note{ flex-basis: auto; width: 100%; max-width: 66ch; }
+  }
+
+  /* pull quote */
+  .pullquote{ padding: 8px 0 8px 70px; border-top: 1px solid var(--line); }
+  .pullquote-inner{ max-width: 44ch; padding-block: 38px; position: relative; }
+  .pullquote-inner::before{ content:""; position:absolute; left:-70px; top:52px; width:44px; height:3px; background: linear-gradient(90deg, var(--line), var(--signal-bright)); }
+  .pullquote p{ font-family: var(--display); font-weight: 500; font-size: clamp(1.45rem, 2.1vw + 0.9rem, 2.05rem); line-height: 1.25; letter-spacing: -0.015em; margin: 0; }
+  .pullquote em{ font-style: normal; color: var(--signal); }
+
+  /* how it works: pipeline */
+  .pipeline{ list-style: none; margin: 30px 0 26px; padding: 0; display:grid; grid-template-columns: repeat(5, 1fr); gap: 14px; counter-reset: step; }
+  .pipeline li{ position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 16px 18px; counter-increment: step; }
+  .pipeline li::before{ content: counter(step, decimal-leading-zero); display:block; font-family: var(--mono); font-size: 0.7rem; color: var(--accent); margin-bottom: 10px; letter-spacing: 0.08em; }
+  .pipeline li:not(:last-child)::after{ content:""; position:absolute; top: 26px; right: -15px; width: 16px; height: 2px; background: var(--line); }
+  .pipeline h3{ font-size: 1rem; margin: 0 0 6px; }
+  .pipeline p{ font-size: 0.88rem; line-height: 1.5; color: var(--ink-soft); margin: 0; }
+  .pipeline .skip{ display:block; margin-top: 8px; font-family: var(--mono); font-size: 0.7rem; color: var(--ok); }
+  @media (max-width: 960px){
+    .pipeline{ grid-template-columns: 1fr; gap: 10px; }
+    .pipeline li:not(:last-child)::after{ top: auto; bottom: -11px; right: auto; left: 28px; width: 2px; height: 10px; }
+  }
+
+  /* features */
+  .features{ padding-block: 60px; border-top: 1px solid var(--line); scroll-margin-top: 12px; }
+  .features h2, .quickstart h2{ font-size: clamp(1.6rem, 1.7vw + 1rem, 2.2rem); margin: 0 0 10px; max-width: 22ch; line-height: 1.12; }
+  .sub{ color: var(--ink-soft); max-width: 58ch; margin: 0; }
+  .feature-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-top: 32px; }
+  @media (max-width: 900px){ .feature-grid{ grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px){ .feature-grid{ grid-template-columns: 1fr; } }
+  .feature-tile{ background: var(--card); padding: 24px 22px; display:flex; flex-direction:column; gap: 10px; }
+  .ico{ width: 26px; height: 26px; color: var(--accent); }
+  .feature-tile h3{ font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0; }
+  .feature-tile p{ font-size: 0.92rem; line-height: 1.55; color: var(--ink-soft); margin: 0; }
+  .feature-tile code{ color: var(--ink); }
+
+  /* trust list */
+  .proofs{ list-style: none; padding: 0; margin: 8px 0 0; display:grid; grid-template-columns: 1fr 1fr; gap: 16px 28px; max-width: 900px; }
+  @media (max-width: 760px){ .proofs{ grid-template-columns: 1fr; } }
+  .proofs li{ padding-left: 30px; position: relative; }
+  .proofs li::before{
+    content:""; position:absolute; left:0; top: 4px; width: 18px; height: 18px; border-radius: 50%;
+    background: color-mix(in srgb, var(--ok) 18%, transparent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5 9.4l2.6 2.6L13 6.6' fill='none' stroke='%2317804f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+  .proofs strong{ display:block; font-family: var(--display); font-weight: 600; font-size: 1.02rem; margin-bottom: 2px; }
+  .proofs span{ font-size: 0.93rem; color: var(--ink-soft); line-height: 1.55; }
+
+  /* quick start */
+  .quickstart{ padding-block: 60px; border-top: 1px solid var(--line); scroll-margin-top: 12px; }
+  .steps{ list-style: none; margin: 30px 0 0; padding: 0; display:grid; grid-template-columns: repeat(2, 1fr); gap: 16px; counter-reset: qs; }
+  @media (max-width: 800px){ .steps{ grid-template-columns: 1fr; } }
+  .steps li{ background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 20px 18px; counter-increment: qs; min-width: 0; }
+  .steps h3{ display:flex; align-items: baseline; gap: 10px; font-size: 1.08rem; margin: 0 0 8px; }
+  .steps h3::before{ content: counter(qs); display:inline-grid; place-items:center; width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; background: var(--btn-bg); color: var(--btn-ink); font-family: var(--mono); font-size: 0.8rem; font-weight: 600; transform: translateY(-2px); }
+  .steps p{ font-size: 0.92rem; color: var(--ink-soft); margin: 0 0 12px; }
+  pre{
+    margin: 0; padding: 12px 14px; background: var(--paper-deep); border: 1px solid var(--line); border-radius: 8px;
+    font-family: var(--mono); font-size: 0.76rem; line-height: 1.65; color: var(--ink); overflow-x: auto; max-width: 100%;
+  }
+  pre .c{ color: var(--ink-soft); }
+  pre .k{ color: var(--accent); }
+  pre .s{ color: var(--signal); }
+
+  /* closing */
+  .closing{ padding-block: 56px; border-top: 1px solid var(--line); max-width: 900px; }
+  .closing p{ max-width: 64ch; margin: 0 0 20px; }
+  .signature{ display:flex; align-items:center; gap: 14px; flex-wrap: wrap; padding-top: 8px; }
+  .signature svg{ flex: 0 0 auto; }
+  .signature p{
+    font-family: var(--display); font-weight: 600; font-size: clamp(1.15rem, 1.2vw + 0.85rem, 1.45rem); margin: 0;
+    text-decoration: underline; text-decoration-color: var(--signal-bright); text-decoration-thickness: 2px; text-underline-offset: 7px;
+  }
+  .cta-band{ border-top: 1px solid var(--line); padding-block: 44px; display:flex; flex-direction:column; gap: 16px; }
+  .cta-band .cta-row{ margin-bottom: 0; }
+  .cta-band .cta-meta{ max-width: 64ch; }
+
+  /* colophon */
+  .colophon{ background: var(--paper-deep); border-top: 1px solid var(--line); margin: 0 -16px; padding: 16px; }
+  .status-line{ max-width: 1080px; margin: 0 auto; display:flex; flex-wrap: wrap; gap: 6px 12px; align-items:center; font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+  .status-line .dot{ color: var(--line); }
+  .status-line a{ color: var(--ink-soft); }
+
+  @media (max-width: 640px){
+    body{ font-size: 16px; }
+    .chapter{ gap: 14px; padding-block: 44px; }
+    .chapter-rail{ flex-basis: 26px; }
+    .chapter-num{ font-size: 1.1rem; }
+    .chapter-label{ display: none; }
+    .pullquote{ padding-left: 0; }
+    .pullquote-inner::before{ display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <a class="brand" href="#top" aria-label="DdnsUpdate home">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#1f5fbf"/>
+        <path d="M23.2 12.2A8 8 0 1 0 24 17.6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M24.4 6.8v5.8h-5.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="16" cy="16" r="3" fill="#ff9a3d"/>
+      </svg>
+      <span>DdnsUpdate</span>
+    </a>
+    <nav class="navlinks" aria-label="Page sections">
+      <a href="#problem">The problem</a>
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#trust">Confidence</a>
+      <a href="#start">Get started</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost btn-sm" href="https://github.com/paultechguy/DdnsUpdate.NET">GitHub</a>
+      <a class="btn btn-primary btn-sm" href="https://github.com/paultechguy/DdnsUpdate.NET/releases/latest">Download</a>
+    </div>
+  </header>
+
+  <section class="hero" id="top">
+    <div class="hero-copy">
+      <p class="kicker">Dynamic DNS for Cloudflare &middot; on Windows</p>
+      <p class="status-pill"><span class="led" aria-hidden="true"></span>Your IP moved. Your DNS already knows.</p>
+      <h1>Your IP address <span class="shift">changes</span>. Your DNS keeps&nbsp;up.</h1>
+      <p class="standfirst">DdnsUpdate watches the public address your internet provider gives you, and the moment it changes, points your Cloudflare DNS records at the new one. It touches only what moved, leaves every other setting alone, and runs quietly as a Windows service or a scheduled task &mdash; so the things you host at home or in the office stay reachable.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/paultechguy/DdnsUpdate.NET/releases/latest">Download for Windows &rarr;</a>
+        <a class="btn btn-ghost" href="#start">Quick start</a>
+      </div>
+      <p class="cta-meta">Free &middot; Open source &middot; MIT &middot; one self-contained .exe &middot; Windows&nbsp;10 or later</p>
+    </div>
+
+    <figure class="scene" style="margin:0">
+      <div class="scene-bar" aria-hidden="true"><i></i><i></i><i></i><span>DdnsUpdate &mdash; one update pass</span></div>
+      <svg viewBox="0 0 480 214" role="img" aria-labelledby="scene-title scene-desc">
+        <title id="scene-title">An IP change, followed by a DNS update</title>
+        <desc id="scene-desc">Your network's public address changes from 198.51.100.23 to 203.0.113.7. DdnsUpdate sends a PATCH to Cloudflare, and the A record for home.example.com now points to 203.0.113.7, with its proxy setting kept.</desc>
+
+        <!-- your network -->
+        <rect class="box" x="14" y="44" width="152" height="126" rx="10"/>
+        <text class="t-label" x="30" y="68">YOUR NETWORK</text>
+        <g class="icon" transform="translate(30 80)">
+          <rect x="0" y="8" width="26" height="12" rx="2.5"/>
+          <line x1="6" y1="14" x2="7" y2="14"/><line x1="11" y1="14" x2="12" y2="14"/>
+          <path d="M8 8 5 1M18 8l3-7"/>
+        </g>
+        <text class="t-small" x="64" y="97">public IPv4</text>
+        <rect class="pill" x="26" y="118" width="128" height="30" rx="15"/>
+        <text class="t-ip ip-old ip-old-l" x="90" y="138" text-anchor="middle">198.51.100.23</text>
+        <text class="t-ip ip-new ip-new-l" x="90" y="138" text-anchor="middle">203.0.113.7</text>
+
+        <!-- the wire -->
+        <line class="wire" x1="170" y1="118" x2="306" y2="118"/>
+        <text class="t-verb" x="238" y="106" text-anchor="middle">PATCH</text>
+        <text class="t-small" x="238" y="140" text-anchor="middle">only if changed</text>
+        <circle class="packet" cx="172" cy="118" r="5"/>
+
+        <!-- the record -->
+        <rect class="box" x="310" y="30" width="156" height="154" rx="10"/>
+        <text class="t-label" x="326" y="54">DNS RECORD</text>
+        <rect class="badge" x="326" y="68" width="20" height="18" rx="4"/>
+        <text class="badge-t" x="336" y="81" text-anchor="middle">A</text>
+        <text class="t-host" x="354" y="81">home.example.com</text>
+        <rect class="pill" x="322" y="100" width="132" height="30" rx="15"/>
+        <text class="t-ip ip-old ip-old-r" x="388" y="120" text-anchor="middle">198.51.100.23</text>
+        <text class="t-ip ip-new ip-new-r" x="388" y="120" text-anchor="middle">203.0.113.7</text>
+        <circle class="kept" cx="330" cy="154" r="3.5"/>
+        <text class="t-small" x="340" y="157">proxied &middot; kept</text>
+        <circle class="kept" cx="330" cy="171" r="3.5"/>
+        <text class="t-small" x="340" y="174">TTL &middot; kept</text>
+        <g class="check">
+          <circle cx="432" cy="62" r="11"/>
+          <path d="M426.5 62.3l3.8 3.8 6.9-7.4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+      </svg>
+      <figcaption class="visually-hidden">Illustration of one update pass and the log lines it writes.</figcaption>
+      <div class="log" aria-hidden="true">
+        <div><span class="lvl">INF</span> New IP address found: <span class="hl">203.0.113.7</span></div>
+        <div><span class="lvl">INF</span> #1: Current external IP is 203.0.113.7 via URL https://api.ipify.org/</div>
+        <div><span class="lvl">INF</span> #1: Processing IP updates for 2 domain(s)</div>
+        <div><span class="lvl">INF</span> #1: Domain <span class="hl">home.example.com</span>, IP updated to 203.0.113.7</div>
+        <div><span class="lvl">INF</span> #1: Domain <span class="hl">vpn.example.com</span>, IP updated to 203.0.113.7</div>
+      </div>
+    </figure>
+  </section>
+</div>
+
+<article class="wrap">
+
+  <section class="chapter" id="problem">
+    <div class="chapter-rail">
+      <span class="chapter-num">01</span>
+      <span class="chapter-label">The problem</span>
+    </div>
+    <div class="chapter-body">
+      <h2>The address you gave the world is only on loan.</h2>
+      <p>You run something worth reaching from outside: a home lab, a media server, a VPN back into the office, a camera system, a small web app for the family. You bought a domain, put it on Cloudflare, and pointed a record at your public IP address. It works. You stop thinking about it.</p>
+      <div class="note-row">
+        <p>Then your internet provider hands your connection a new address &mdash; after a router reboot, a power cut, a maintenance window, or simply because residential and small-business addresses are leased, not owned. Nothing tells you. Your DNS record still points at the old address, which now belongs to someone else or to no one, and everything behind your domain quietly disappears.</p>
+        <div class="margin-note">&gt; the failure mode is silence: no error on your side, just a name that resolves to the wrong place.</div>
+      </div>
+      <p>You find out when a VPN won't connect from a hotel, when a family member says the photos are down, or when a monitoring email you forgot you set up arrives at two in the morning. The fix takes a minute &mdash; log in, copy the new address, paste it into the record. Remembering to do it, every time, forever, is the part that doesn't scale.</p>
+    </div>
+  </section>
+
+  <div class="pullquote">
+    <div class="pullquote-inner">
+      <p>The address changes on the provider's schedule. The fix should happen on <em>yours</em> &mdash; automatically.</p>
+    </div>
+  </div>
+
+  <section class="chapter" id="how">
+    <div class="chapter-rail">
+      <span class="chapter-num">02</span>
+      <span class="chapter-label">How it works</span>
+    </div>
+    <div class="chapter-body">
+      <h2>One small loop, run on a schedule you choose.</h2>
+      <p>DdnsUpdate repeats the same five steps every pass &mdash; every 60 minutes by default. Most passes end at step two, because most of the time nothing has changed, and then nothing is sent to Cloudflare at all.</p>
+
+      <ol class="pipeline">
+        <li>
+          <h3>Ask</h3>
+          <p>Ask a public &ldquo;what is my IP&rdquo; service for your address. The list is yours to edit; a slow or failing service is skipped after 15 seconds and the next one is tried.</p>
+        </li>
+        <li>
+          <h3>Compare</h3>
+          <p>Compare it with the last address DdnsUpdate saw, which it keeps on disk between runs.</p>
+          <span class="skip">&rarr; unchanged? done until next pass</span>
+        </li>
+        <li>
+          <h3>Validate</h3>
+          <p>Check every enabled domain has what it needs &mdash; zone, record, credentials &mdash; and name anything missing.</p>
+        </li>
+        <li>
+          <h3>Update</h3>
+          <p>Send Cloudflare a PATCH with just the record type, name and new address. Transient API errors are retried with backoff.</p>
+        </li>
+        <li>
+          <h3>Wait</h3>
+          <p>Sleep until the next pass &mdash; or exit, when it's running as a scheduled task or with <code>--once</code>.</p>
+        </li>
+      </ol>
+
+      <div class="note-row">
+        <p>That last detail in step four matters more than it sounds. A DNS record carries more than an address: whether Cloudflare proxies it, its TTL, its comment. Replacing the whole record would reset what you didn't send &mdash; and quietly switch off the proxy on a record you'd carefully put behind it. DdnsUpdate changes the address and nothing else.</p>
+        <div class="margin-note">&gt; PATCH, not PUT. fields that aren't sent are left exactly as they were.</div>
+      </div>
+      <p>If you want to hear about it, DdnsUpdate can email you whenever the address changes, with the old and new values, through any SMTP server you already use.</p>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <p class="kicker">What's in the box</p>
+    <h2>Small enough to forget about. Complete enough to trust.</h2>
+    <p class="sub">Everything below is in the single executable. There's no agent to register, no account to create, and no service of ours in the loop.</p>
+    <div class="feature-grid">
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="1.5"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M8 10.5l2.5 2.5L16 8"/></svg>
+        <h3>Service or scheduled task</h3>
+        <p>Install it as a Windows service that runs a loop, or let Task Scheduler start it, run one pass and exit. Same executable, same settings.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M21 12v2"/></svg>
+        <h3>Scoped API tokens</h3>
+        <p>Use a Cloudflare API token that can edit DNS in just the zones you choose. The all-powerful Global API Key still works for existing setups.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="8" height="5" rx="1"/><rect x="3" y="15" width="8" height="5" rx="1"/><rect x="13" y="9.5" width="8" height="5" rx="1"/><path d="M11 6.5h1v11h-1M12 12h1"/></svg>
+        <h3>Many records</h3>
+        <p>Keep any number of records current, across zones and even accounts. Shared values go in one <code>defaultDomain</code>; updates can run in parallel.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4"/><path d="M20 12a8 8 0 0 1-14 5.3"/><path d="M6 21v-4h4"/></svg>
+        <h3>Rides out a bad minute</h3>
+        <p>IP services are tried in turn until one answers; Cloudflare timeouts and rate limits are retried with backoff before a pass gives up.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 13h7M9 17h4"/></svg>
+        <h3>Edit settings live</h3>
+        <p>Settings files are watched. Add a domain or change the interval and it takes effect on the next pass &mdash; no restart.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/></svg>
+        <h3><code>--dry-run</code></h3>
+        <p>Reads each record from Cloudflare to prove your token and IDs work, then shows exactly what would change &mdash; without updating DNS, saving state, or sending email.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>
+        <h3><code>--once</code></h3>
+        <p>Run one real pass and exit, whatever the settings say. Ideal for a first live test, or for a scheduled task.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>
+        <h3>One file</h3>
+        <p>A single self-contained <code>DdnsUpdate.exe</code>, about 100&nbsp;MB, with the .NET runtime inside. Nothing else to install.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/></svg>
+        <h3>Logs you can read</h3>
+        <p>Plain-text daily logs in <code>%ProgramData%</code>, kept for 31 days, and the same lines on screen when you run it by hand.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+        <h3>Honest exit codes</h3>
+        <p><code>0</code> when a run finishes normally, <code>1</code> when it can't start or fails &mdash; so Task Scheduler and service recovery know the difference.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3.5 6l8.5 7 8.5-7"/></svg>
+        <h3>Email on change</h3>
+        <p>Optional notice with the old and new address, via your own SMTP server &mdash; STARTTLS, or implicit TLS on port 465.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
+        <h3>Open source</h3>
+        <p>MIT licensed C# on .NET 10, with unit tests. Read what it does, build it yourself, change it if you need to.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="chapter" id="trust">
+    <div class="chapter-rail">
+      <span class="chapter-num">03</span>
+      <span class="chapter-label">Confidence</span>
+    </div>
+    <div class="chapter-body">
+      <h2>Something that edits your DNS has to earn it.</h2>
+      <p>A dynamic DNS updater has one job and a lot of trust: it holds credentials to your domain and runs unattended. So it's built to be predictable first and clever never.</p>
+      <ul class="proofs">
+        <li><strong>It asks before it acts.</strong><span>Run with <code>--dry-run</code> first and read exactly what it would change. Then <code>--once</code> for a single real pass you can watch.</span></li>
+        <li><strong>It changes only the address.</strong><span>A PATCH with type, name and content. Proxy status, TTL and everything else on the record stay as you set them.</span></li>
+        <li><strong>It checks before it sends.</strong><span>Each record is validated first; a missing zone, record ID or credential is logged by name and that record is skipped.</span></li>
+        <li><strong>It only talks to who you tell it to.</strong><span>The IP services you list, the Cloudflare API, and your SMTP server if you enable email. No telemetry, no phone-home.</span></li>
+        <li><strong>Your secrets stay in your file.</strong><span>Keys and tokens live in a <code>*.user.json</code> file on your machine that upgrades never overwrite and the repository never contains.</span></li>
+        <li><strong>It's tested where it counts.</strong><span>Unit tests cover the update loop, the request Cloudflare receives, credential precedence and provider fallback.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="quickstart" id="start">
+    <p class="kicker">Quick start</p>
+    <h2>From download to set-and-forget in four steps.</h2>
+    <p class="sub">The <a href="https://github.com/paultechguy/DdnsUpdate.NET#readme">README</a> walks through each step in detail, including building from source and running under Task Scheduler.</p>
+    <ol class="steps">
+      <li>
+        <h3>Download</h3>
+        <p>Grab the latest release and extract it to a folder of its own.</p>
+<pre><span class="c"># for example</span>
+C:\DdnsUpdate\DdnsUpdate.exe
+C:\DdnsUpdate\appsettings.json
+C:\DdnsUpdate\appsettings.production.json</pre>
+      </li>
+      <li>
+        <h3>Configure</h3>
+        <p>Create <code>appsettings.production.user.json</code> beside the exe with your record and API token.</p>
+<pre>{
+  <span class="k">"cloudflareSettings"</span>: {
+    <span class="k">"domains"</span>: [{
+      <span class="k">"isEnabled"</span>: true,
+      <span class="k">"name"</span>: <span class="s">"home.example.com"</span>,
+      <span class="k">"zoneId"</span>: <span class="s">"{zoneId}"</span>,
+      <span class="k">"recordId"</span>: <span class="s">"{recordId}"</span>,
+      <span class="k">"recordType"</span>: <span class="s">"A"</span>,
+      <span class="k">"apiToken"</span>: <span class="s">"{apiToken}"</span>
+    }]
+  }
+}</pre>
+      </li>
+      <li>
+        <h3>Dry run, then one real pass</h3>
+        <p>Preview the changes safely, then let it make them once while you watch.</p>
+<pre>.\DdnsUpdate.exe --dry-run
+.\DdnsUpdate.exe --once</pre>
+      </li>
+      <li>
+        <h3>Install and forget</h3>
+        <p>From an administrator prompt, register it as a service that starts with Windows.</p>
+<pre>sc.exe create DdnsUpdate binPath= <span class="s">"C:\DdnsUpdate\DdnsUpdate.exe"</span> start= delayed-auto
+sc.exe start DdnsUpdate</pre>
+      </li>
+    </ol>
+  </section>
+
+  <section class="chapter" id="who">
+    <div class="chapter-rail">
+      <span class="chapter-num">04</span>
+      <span class="chapter-label">Who it's for</span>
+    </div>
+    <div class="chapter-body">
+      <h2>Who it's for, and what it deliberately isn't.</h2>
+      <p>It's for the home-labber whose services live behind a residential connection. The small office with a VPN endpoint and no static IP in the budget. The developer who hosts a side project on a machine under the desk. Anyone whose domain already lives on Cloudflare and who would rather never log in to update an A record again.</p>
+      <p>It's also worth being clear about the edges. DdnsUpdate updates Cloudflare, and only Cloudflare. It tracks your public IPv4 address, for <code>A</code> records. It runs on Windows. Those limits are what keep it small enough to read in an afternoon and dull enough to leave running for years &mdash; which, for something that edits your DNS unattended, is exactly the point.</p>
+    </div>
+  </section>
+
+  <section class="closing">
+    <p>Picture the next time your provider shuffles addresses. A router reboots somewhere in the night. Within the hour, a small program notices, asks Cloudflare to change one field on each of your records, writes a few lines to a log file, and goes back to sleep.</p>
+    <p>In the morning the VPN connects, the photos load, the side project answers. Nobody had to remember anything.</p>
+    <div class="signature">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#1f5fbf"/>
+        <path d="M23.2 12.2A8 8 0 1 0 24 17.6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M24.4 6.8v5.8h-5.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="16" cy="16" r="3" fill="#ff9a3d"/>
+      </svg>
+      <p>Your address changed. Nobody noticed.</p>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/paultechguy/DdnsUpdate.NET/releases/latest">Download for Windows &rarr;</a>
+      <a class="btn btn-ghost" href="https://github.com/paultechguy/DdnsUpdate.NET">View source on GitHub</a>
+    </div>
+    <p class="cta-meta">Extract the zip, add your Cloudflare record and token, run <code>--dry-run</code>. Nothing to sign up for &mdash; your settings live in a file next to the executable.</p>
+  </section>
+
+</article>
+
+<footer class="colophon">
+  <div class="status-line">
+    <span>Cloudflare DNS</span><span class="dot">&middot;</span>
+    <span>IPv4 A records</span><span class="dot">&middot;</span>
+    <span>Windows 10+</span><span class="dot">&middot;</span>
+    <span>No telemetry</span><span class="dot">&middot;</span>
+    <span>MIT</span><span class="dot">&middot;</span>
+    <a href="https://github.com/paultechguy/DdnsUpdate.NET">github.com/paultechguy/DdnsUpdate.NET</a>
+  </div>
+</footer>
+
+</body>
+</html>
