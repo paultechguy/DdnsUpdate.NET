@@ -551,7 +551,7 @@ All settings live in JSON. Put yours in `appsettings.production.user.json`. Any 
 | `randomizeIpAddressProviderSelecion` | `true` | Start with a random IP service each pass, to spread the load. The key's spelling is intentional. |
 | `ipAddressProviders` | 8 public services | URLs that return your IP address as text; each is tried in turn until one works |
 
-> **Note on lists:** a list in your file replaces the default list item by item, by position. It doesn't replace the whole list. To use fewer IP services than the defaults, set the entries you don't want to an empty string, or better, leave the list alone.
+> **Note on lists:** a list in your file replaces the default list item by item, by position. It doesn't replace the whole list. Your entries overwrite the first defaults, and any defaults beyond them remain, so you can replace or add IP services but not remove them from your own file. Every entry must be a full `http(s)://` URL, or the app refuses to start.
 
 ### `applicationSettings.workerServiceSettings` (email notifications)
 
