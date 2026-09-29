@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DdnsUpdate.Core\DdnsUpdate.Core.csproj" />
+  </ItemGroup>
+</Project>

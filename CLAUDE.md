@@ -33,6 +33,12 @@ dotnet publish src\DdnsUpdate.Application -p:PublishProfile=win-x64-single
 ```
 
 Layout: `src/` holds the six app projects, `tests/` the test projects, and `docs/` the build and deploy notes. Shared build files (`Directory.Build.props`, `Directory.Packages.props`, `global.json`, `.editorconfig`) are at the root.
+
+Tests use xUnit v3 on Microsoft Testing Platform (opted in via `global.json`'s `test.runner`; no VSTest packages).
+- `tests/Directory.Build.props` imports the root props, adds xUnit, and compiles the fakes in `tests/Shared/` into every test project: `TestOptionsMonitor`, `FakeHttpMessageHandler` and `StubHttpClientFactory`.
+- `WorkerService` tests use in-memory fakes (`tests/DdnsUpdate.Service.Tests/Fakes.cs`) and a `FakeTimeProvider`, so they never touch ProgramData or the network. Tests with `maximumDdnsUpdateIterations = 1` never advance the clock, so they would hang if the worker waited before exiting.
+- Run one test with `dotnet test --project tests\DdnsUpdate.Service.Tests -- --filter-method "*UnchangedIp_SkipsUpdates"`.
+- Pass `TestContext.Current.CancellationToken` to anything that takes a token. xUnit1051 warns otherwise.
 - To smoke-test a single pass, set the environment variable `applicationSettings__ddnsSettings__maximumDdnsUpdateIterations=1` and run the Debug exe.
   - Without it, the app sleeps 60 minutes between passes.
   - Don't pass settings as command-line arguments. CommandLineParser rejects unknown arguments, and the app then exits with code 1 without running.

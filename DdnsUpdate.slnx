@@ -23,4 +23,10 @@
     <Project Path="src/DdnsUpdate.Email/DdnsUpdate.Email.csproj" />
     <Project Path="src/DdnsUpdate.Service/DdnsUpdate.Service.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <File Path="tests/Directory.Build.props" />
+    <Project Path="tests/DdnsUpdate.Core.Tests/DdnsUpdate.Core.Tests.csproj" />
+    <Project Path="tests/DdnsUpdate.DdnsProvider.Cloudflare.Tests/DdnsUpdate.DdnsProvider.Cloudflare.Tests.csproj" />
+    <Project Path="tests/DdnsUpdate.Service.Tests/DdnsUpdate.Service.Tests.csproj" />
+  </Folder>
 </Solution>
