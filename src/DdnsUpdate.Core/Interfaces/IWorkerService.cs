@@ -19,6 +19,7 @@ public interface IWorkerService
    /// Runs the work. The application stops when the returned task completes.
    /// </summary>
    /// <param name="cancelToken">Signaled on service stop or Ctrl-C.</param>
-   /// <returns>A <see cref="Task"/> that completes when the work is finished or canceled.</returns>
-   Task ExecuteAsync(CancellationToken cancelToken);
+   /// <returns>True if the run succeeded; false if it found problems that should make the process
+   /// exit with a failure code (e.g. a dry run that found a misconfigured domain).</returns>
+   Task<bool> ExecuteAsync(CancellationToken cancelToken);
 }

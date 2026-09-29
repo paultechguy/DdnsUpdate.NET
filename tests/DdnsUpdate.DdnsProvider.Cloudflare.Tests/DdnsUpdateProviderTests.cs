@@ -183,6 +183,48 @@ public sealed class DdnsUpdateProviderTests
       Assert.Empty(this.handler.Requests);
    }
 
+   [Theory]
+   [InlineData("example.com", "A", true, "")]
+   [InlineData("other.example.com", "A", false, "recordId record is the record for other.example.com, not example.com")]
+   [InlineData("example.com", "AAAA", false, "the record is type AAAA, but recordType is A")]
+   public async Task GetDnsRecordAsync_ChecksRecordMatchesConfiguration(string recordName, string recordType, bool expectedSuccess, string expectedMessage)
+   {
+      string json = $$$"""{"success":true,"result":{"id":"record","name":"{{{recordName}}}","type":"{{{recordType}}}","content":"198.51.100.1","proxied":true}}""";
+      var recordHandler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Text(HttpStatusCode.OK, json));
+      DdnsUpdateProvider provider = new(
+         new TestOptionsMonitor<CloudflareSettings>(Settings(new CloudflareDomain { IsEnabled = true, Name = "example.com", RecordId = "record", ZoneId = "zone", RecordType = "A", ApiToken = "token" })),
+         new StubHttpClientFactory(recordHandler, CloudflareBaseAddress));
+
+      DdnsProviderRecordResult result = await provider.GetDnsRecordAsync("example.com", TestContext.Current.CancellationToken);
+
+      Assert.Equal(expectedSuccess, result.IsSuccess);
+      Assert.Equal(expectedMessage, result.Message);
+      if (expectedSuccess)
+      {
+         Assert.Equal("198.51.100.1", result.CurrentIpAddress);
+      }
+
+      // a dry run only reads
+      FakeHttpMessageHandler.RecordedRequest request = Assert.Single(recordHandler.Requests);
+      Assert.Equal(HttpMethod.Get, request.Method);
+      Assert.Equal(new Uri("https://api.cloudflare.com/client/v4/zones/zone/dns_records/record"), request.Uri);
+      Assert.Equal("Bearer token", request.Headers["Authorization"]);
+   }
+
+   [Fact]
+   public async Task GetDnsRecordAsync_ErrorResponse_ReturnsFailure()
+   {
+      var deniedHandler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Text(HttpStatusCode.Forbidden, """{"success":false}"""));
+      DdnsUpdateProvider provider = new(
+         new TestOptionsMonitor<CloudflareSettings>(Settings(new CloudflareDomain { IsEnabled = true, Name = "example.com", RecordId = "record", ZoneId = "zone", RecordType = "A", ApiToken = "token" })),
+         new StubHttpClientFactory(deniedHandler, CloudflareBaseAddress));
+
+      DdnsProviderRecordResult result = await provider.GetDnsRecordAsync("example.com", TestContext.Current.CancellationToken);
+
+      Assert.False(result.IsSuccess);
+      Assert.StartsWith("Forbidden:", result.Message);
+   }
+
    private static CloudflareSettings Settings(params CloudflareDomain[] domains)
    {
       return new CloudflareSettings { Domains = domains };

@@ -27,6 +27,12 @@ internal sealed class FakeDdnsProvider : IDdnsUpdateProvider
 
    public ConcurrentQueue<(string Domain, string IpAddress)> Updates { get; } = new();
 
+   /// <summary>
+   /// Gets the current record value per domain, as returned by <see cref="GetDnsRecordAsync"/>;
+   /// a domain missing from here fails to read.
+   /// </summary>
+   public Dictionary<string, string> RecordContents { get; } = [];
+
    public int GetDomainNamesCallCount { get; private set; }
 
    public string ProviderName => "Fake";
@@ -41,6 +47,13 @@ internal sealed class FakeDdnsProvider : IDdnsUpdateProvider
    {
       bool valid = !this.InvalidDomains.Contains(domainName);
       return Task.FromResult(new DdnsProviderSuccessResult { IsSuccess = valid, Message = valid ? string.Empty : "invalid" });
+   }
+
+   public Task<DdnsProviderRecordResult> GetDnsRecordAsync(string domainName, CancellationToken cancelToken = default)
+   {
+      return Task.FromResult(this.RecordContents.TryGetValue(domainName, out string? content)
+         ? new DdnsProviderRecordResult { IsSuccess = true, CurrentIpAddress = content }
+         : new DdnsProviderRecordResult { IsSuccess = false, Message = "cannot read" });
    }
 
    public Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(string domainName, string ipAddress, CancellationToken cancelToken = default)

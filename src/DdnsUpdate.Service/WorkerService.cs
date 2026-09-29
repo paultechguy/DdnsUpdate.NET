@@ -35,7 +35,8 @@ public sealed partial class WorkerService(
    IHttpClientFactory clientFactory,
    IDdnsUpdateProvider ddnsUpdateProvider,
    IDdnsStateStore stateStore,
-   TimeProvider timeProvider) : IWorkerService
+   TimeProvider timeProvider,
+   CommandLineOptions commandLineOptions) : IWorkerService
 {
    /// <summary>
    /// The name of the <see cref="HttpClient"/> used to query the external IP address providers.
@@ -43,6 +44,7 @@ public sealed partial class WorkerService(
    public const string IpAddressHttpClientName = "IpAddressProvider";
 
    private readonly IOptionsMonitor<ApplicationSettings> appSettingsMonitor = appSettingsMonitor;
+   private readonly CommandLineOptions commandLineOptions = commandLineOptions;
    private readonly IDdnsStateStore stateStore = stateStore;
    private readonly ILogger<WorkerService> logger = logger;
    private readonly IHttpClientFactory clientFactory = clientFactory;
@@ -54,17 +56,29 @@ public sealed partial class WorkerService(
    private ApplicationSettings appSettings = new();
    private UriStatistics uriStatistics = [];
 
+   private bool IsDryRun => this.commandLineOptions.DryRun;
+
    /// <inheritdoc/>
-   public async Task ExecuteAsync(CancellationToken cancelToken)
+   public async Task<bool> ExecuteAsync(CancellationToken cancelToken)
    {
       // When this method returns, the application stops.  As a Windows Service it loops until
       // cancellation is requested; as a Scheduled Task, maximumDdnsUpdateIterations (usually 1)
-      // ends the loop instead.  Ctrl-C in console mode also triggers a cancellation.
+      // or --once ends the loop instead.  Ctrl-C in console mode also triggers a cancellation.
 
       try
       {
          // load settings before logging so the startup messages show the configured values
          this.RefreshApplicationSettings();
+
+         if (this.IsDryRun)
+         {
+            this.logger.LogInformation("DRY RUN: nothing will be changed (no DNS updates, no saved state, no email)");
+
+            // load any previous uri stats; they are used but never saved in a dry run
+            await this.LoadUriStatisticsAsync();
+
+            return await this.ExecuteDryRunAsync(cancelToken);
+         }
 
          this.LogInitialStartupMessages();
 
@@ -88,17 +102,126 @@ public sealed partial class WorkerService(
             // pause interval before exiting
             if (this.IsMaximumUpdatesReached(loopCounter))
             {
-               this.logger.LogInformation("Maximum DDNS updates ({MaximumIterations}) reached; stopping", this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations);
+               this.logger.LogInformation("Maximum DDNS updates ({MaximumIterations}) reached; stopping", this.GetMaximumIterations());
                break;
             }
 
             await this.SleepBetweenAllIpUpdatesAsync(cancelToken);
          }
+
+         // individual domain failures are logged but do not fail a real run; the next pass
+         // retries them
+         return true;
       }
       finally
       {
          this.logger.LogInformation("Ending: {Class}.{Method}", nameof(WorkerService), nameof(this.ExecuteAsync));
       }
+   }
+
+   /// <summary>
+   /// Performs a dry run: one pass that detects the IP address, reads every enabled domain's DNS
+   /// record, and reports what a real run would do, without changing anything.
+   /// </summary>
+   /// <returns>True if no problems were found.</returns>
+   private async Task<bool> ExecuteDryRunAsync(CancellationToken cancelToken)
+   {
+      List<string> domainNames = await this.ddnsUpdateProvider.GetDomainNamesAsync();
+      if (domainNames.Count == 0)
+      {
+         this.logger.LogWarning("DRY RUN: no enabled domains; a real run would do nothing");
+         return true;
+      }
+
+      (string ip, UriStatisticItem? statsItem) = await this.GetIpAddressV4Async(cancelToken);
+      if (string.IsNullOrWhiteSpace(ip) || statsItem is null)
+      {
+         this.logger.LogError("DRY RUN: unable to determine the external IP address from any provider");
+         return false;
+      }
+
+      // the same decision a real pass makes (see ExecuteIterationAsync)
+      string lastIpAddress = this.stateStore.LoadLastIpAddress();
+      bool ipChanged = ip != lastIpAddress;
+      bool wouldUpdate = ipChanged || this.appSettings.DdnsSettings.AlwaysUpdateDdnsEvenIfUnchanged;
+
+      this.logger.LogInformation("DRY RUN: external IP is {IpAddress} via {ProviderUri}; last saved IP is {LastIpAddress}", ip, statsItem.Uri.ToString(), string.IsNullOrWhiteSpace(lastIpAddress) ? "none" : lastIpAddress);
+      if (wouldUpdate)
+      {
+         this.logger.LogInformation("DRY RUN: a real run would update {DomainCount} domain(s)", domainNames.Count);
+      }
+      else
+      {
+         this.logger.LogInformation("DRY RUN: the IP is unchanged since the last run, so a real run would skip DNS updates");
+      }
+
+      // one domain at a time so the report reads in order
+      bool noProblems = true;
+      foreach (string domainName in domainNames)
+      {
+         noProblems &= await this.DryRunDomainAsync(domainName, ip, wouldUpdate, lastIpAddress, cancelToken);
+      }
+
+      WorkerServiceSettings email = this.appSettings.WorkerServiceSettings;
+      if (ipChanged && email.MessageIsEnabled)
+      {
+         this.logger.LogInformation("DRY RUN: a real run would email {To} about the IP change", email.MessageToEmailAddress);
+      }
+
+      if (noProblems)
+      {
+         this.logger.LogInformation("DRY RUN complete: no problems found");
+      }
+      else
+      {
+         this.logger.LogError("DRY RUN complete: problems found; see the errors above");
+      }
+
+      return noProblems;
+   }
+
+   private async Task<bool> DryRunDomainAsync(
+      string domainName,
+      string ip,
+      bool wouldUpdate,
+      string lastIpAddress,
+      CancellationToken cancelToken)
+   {
+      DdnsProviderSuccessResult validResult = await this.ddnsUpdateProvider.IsDomainValidAsync(domainName);
+      if (!validResult.IsSuccess)
+      {
+         this.logger.LogError("DRY RUN: {Domain}: invalid configuration; {Reason}", domainName, validResult.Message);
+         return false;
+      }
+
+      // a read-only request proves the credentials, zone id and record id actually work
+      DdnsProviderRecordResult record = await this.ddnsUpdateProvider.GetDnsRecordAsync(domainName, cancelToken);
+      if (!record.IsSuccess)
+      {
+         this.logger.LogError("DRY RUN: {Domain}: cannot read the DNS record; {Reason}", domainName, record.Message);
+         return false;
+      }
+
+      if (record.CurrentIpAddress == ip)
+      {
+         this.logger.LogInformation("DRY RUN: {Domain}: record already points to {IpAddress}; OK", domainName, ip);
+      }
+      else if (wouldUpdate)
+      {
+         this.logger.LogInformation("DRY RUN: {Domain}: would change {CurrentIpAddress} -> {IpAddress}", domainName, record.CurrentIpAddress, ip);
+      }
+      else
+      {
+         // the record drifted (e.g. edited by hand) but the saved IP says nothing changed
+         this.logger.LogWarning(
+            "DRY RUN: {Domain}: record points to {CurrentIpAddress}, not {IpAddress}, but a real run would skip it because the IP matches the last saved IP ({LastIpAddress}). Delete LastIpAddress.txt or set alwaysUpdateDdnsEvenIfUnchanged to force an update",
+            domainName,
+            record.CurrentIpAddress,
+            ip,
+            lastIpAddress);
+      }
+
+      return true;
    }
 
    /// <summary>
@@ -271,7 +394,10 @@ public sealed partial class WorkerService(
 
             // the stats file is written on success only; fail counts ride along with the next save
             statsItem.IncrementSuccessCount();
-            await this.SaveUriStatisticsAsync();
+            if (!this.IsDryRun)
+            {
+               await this.SaveUriStatisticsAsync();
+            }
 
             return (ipAddress!.ToString(), statsItem);
          }
@@ -397,10 +523,14 @@ public sealed partial class WorkerService(
    private bool IsMaximumUpdatesReached(int loopCounter)
    {
       // zero (the default) means run forever
-      bool maxUpdatesReached = this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations > 0
-         && loopCounter >= this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations;
+      int maximumIterations = this.GetMaximumIterations();
+      return maximumIterations > 0 && loopCounter >= maximumIterations;
+   }
 
-      return maxUpdatesReached;
+   private int GetMaximumIterations()
+   {
+      // --once overrides the setting
+      return this.commandLineOptions.Once ? 1 : this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations;
    }
 
    private async Task SaveUriStatisticsAsync()

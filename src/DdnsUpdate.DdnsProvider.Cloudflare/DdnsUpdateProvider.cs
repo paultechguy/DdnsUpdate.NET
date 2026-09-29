@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using DdnsUpdate.DdnsProvider.Cloudflare.Models;
 using DdnsUpdate.DdnsProvider.Interfaces;
@@ -124,22 +125,7 @@ public sealed class DdnsUpdateProvider(
 
       try
       {
-         // relative to the client's base address (see AddCloudflareDdnsProvider)
-         string zoneId = this.GetSettingsZoneId(domain);
-         using var request = new HttpRequestMessage(HttpMethod.Patch, $"zones/{zoneId}/dns_records/{domain.RecordId}");
-
-         // headers go on the request, not the client, because domains are updated in parallel
-         // and may use different credentials
-         Credentials credentials = this.GetSettingsCredentials(domain);
-         if (!string.IsNullOrWhiteSpace(credentials.ApiToken))
-         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.ApiToken);
-         }
-         else
-         {
-            request.Headers.Add("X-Auth-Email", credentials.AuthorizationEmail);
-            request.Headers.Add("X-Auth-Key", credentials.AuthorizationKey);
-         }
+         using HttpRequestMessage request = this.CreateRecordRequest(HttpMethod.Patch, domain);
 
          // Use PATCH, not PUT.  PUT is an overwrite: Cloudflare resets any field we omit
          // back to its default, which silently turns off the proxy (proxied=false) on
@@ -167,9 +153,92 @@ public sealed class DdnsUpdateProvider(
       }
    }
 
+   /// <inheritdoc/>
+   /// <remarks>
+   /// Sends a GET for the configured record. Besides proving the credentials, zone id and
+   /// record id work, it fails if the record id belongs to a different name or record type
+   /// than configured, which would otherwise make an update overwrite the wrong record.
+   /// </remarks>
+   public async Task<DdnsProviderRecordResult> GetDnsRecordAsync(
+      string domainName,
+      CancellationToken cancelToken = default)
+   {
+      CloudflareDomain? domain = this.FindDomain(domainName);
+      if (domain is null)
+      {
+         return RecordFailure($"Domain {domainName} does not exist");
+      }
+
+      try
+      {
+         using HttpRequestMessage request = this.CreateRecordRequest(HttpMethod.Get, domain);
+         HttpClient client = this.clientFactory.CreateClient(HttpClientName);
+         using HttpResponseMessage response = await client.SendAsync(request, cancelToken);
+         string body = (await response.Content.ReadAsStringAsync(cancelToken)).Trim();
+         if (!response.IsSuccessStatusCode)
+         {
+            return RecordFailure($"{response.StatusCode}: {response.ReasonPhrase}; {body}");
+         }
+
+         // { "success": true, "result": { "name": "...", "type": "A", "content": "1.2.3.4", ... } }
+         using JsonDocument json = JsonDocument.Parse(body);
+         JsonElement record = json.RootElement.GetProperty("result");
+         string name = record.GetProperty("name").GetString() ?? string.Empty;
+         string type = record.GetProperty("type").GetString() ?? string.Empty;
+         string content = record.GetProperty("content").GetString() ?? string.Empty;
+
+         if (!name.Equals(domain.Name, StringComparison.OrdinalIgnoreCase))
+         {
+            return RecordFailure($"recordId {domain.RecordId} is the record for {name}, not {domain.Name}");
+         }
+
+         string recordType = this.GetSettingsRecordType(domain);
+         if (!type.Equals(recordType, StringComparison.OrdinalIgnoreCase))
+         {
+            return RecordFailure($"the record is type {type}, but recordType is {recordType}");
+         }
+
+         return new DdnsProviderRecordResult { IsSuccess = true, CurrentIpAddress = content };
+      }
+      catch (Exception ex) when (ex is not OperationCanceledException || !cancelToken.IsCancellationRequested)
+      {
+         return RecordFailure($"Exception, unable to read the DNS record for domain {domain.Name}, {ex.Message}");
+      }
+   }
+
    private static DdnsProviderSuccessResult Failure(string message)
    {
       return new DdnsProviderSuccessResult { IsSuccess = false, Message = message };
+   }
+
+   private static DdnsProviderRecordResult RecordFailure(string message)
+   {
+      return new DdnsProviderRecordResult { IsSuccess = false, Message = message };
+   }
+
+   /// <summary>
+   /// Creates a request for the domain's DNS record, with its credentials, relative to the
+   /// client's base address (see AddCloudflareDdnsProvider).
+   /// </summary>
+   private HttpRequestMessage CreateRecordRequest(HttpMethod method, CloudflareDomain domain)
+   {
+      string zoneId = this.GetSettingsZoneId(domain);
+      var request = new HttpRequestMessage(method, $"zones/{zoneId}/dns_records/{domain.RecordId}");
+
+      // headers go on the request, not the client, because domains are updated in parallel
+      // and may use different credentials
+      Credentials credentials = this.GetSettingsCredentials(domain);
+      if (!string.IsNullOrWhiteSpace(credentials.ApiToken))
+      {
+         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.ApiToken);
+      }
+      else
+      {
+         request.Headers.Add("X-Auth-Email", credentials.AuthorizationEmail);
+         request.Headers.Add("X-Auth-Key", credentials.AuthorizationKey);
+      }
+
+      return request;
    }
 
    private CloudflareDomain? FindDomain(string domainName)

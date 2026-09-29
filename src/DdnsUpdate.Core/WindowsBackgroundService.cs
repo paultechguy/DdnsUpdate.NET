@@ -33,7 +33,11 @@ public sealed class WindowsBackgroundService(
 
       try
       {
-         await this.appService.ExecuteAsync(cancelToken);
+         if (!await this.appService.ExecuteAsync(cancelToken))
+         {
+            // e.g. a dry run that found a problem; report it to scripts through the exit code
+            Environment.ExitCode = 1;
+         }
       }
       catch (OperationCanceledException)
       {

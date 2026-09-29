@@ -39,6 +39,7 @@ public sealed class WorkerServiceTests
    private readonly InMemoryStateStore stateStore = new();
    private readonly RecordingEmailSender emailSender = new();
    private readonly FakeTimeProvider timeProvider = new();
+   private readonly CommandLineOptions commandLineOptions = new();
    private readonly Dictionary<string, Func<HttpResponseMessage>> ipResponses = new()
    {
       [Provider1] = () => FakeHttpMessageHandler.Text(HttpStatusCode.OK, CurrentIp + "\n"),
@@ -193,6 +194,82 @@ public sealed class WorkerServiceTests
       Assert.Equal(1, this.ddnsProvider.GetDomainNamesCallCount);
    }
 
+   [Fact]
+   public async Task Once_OverridesMaximumIterations()
+   {
+      this.settings.DdnsSettings.MaximumDdnsUpdateIterations = 0; // would run forever
+      this.commandLineOptions.Once = true;
+
+      // completes without advancing the clock, so it never waits for a second pass
+      bool result = await this.CreateWorker().ExecuteAsync(TestContext.Current.CancellationToken);
+
+      Assert.True(result);
+      Assert.Equal(1, this.ddnsProvider.GetDomainNamesCallCount);
+      Assert.Equal(2, this.ddnsProvider.Updates.Count);
+   }
+
+   [Fact]
+   public async Task DryRun_ChangesNothingAndSucceeds()
+   {
+      this.commandLineOptions.DryRun = true;
+      this.settings.DdnsSettings.MaximumDdnsUpdateIterations = 0; // a dry run is always one pass
+      this.stateStore.LastIpAddress = "198.51.100.1";
+      this.ddnsProvider.RecordContents["a.example.com"] = "198.51.100.1";
+      this.ddnsProvider.RecordContents["b.example.com"] = CurrentIp;
+      this.settings.WorkerServiceSettings = new WorkerServiceSettings
+      {
+         MessageIsEnabled = true,
+         MessageFromEmailAddress = "ddns@example.com",
+         MessageToEmailAddress = "me@example.com",
+      };
+
+      bool result = await this.CreateWorker().ExecuteAsync(TestContext.Current.CancellationToken);
+
+      Assert.True(result);
+      Assert.Equal(1, this.ddnsProvider.GetDomainNamesCallCount);
+      Assert.Empty(this.ddnsProvider.Updates);
+      Assert.Equal("198.51.100.1", this.stateStore.LastIpAddress);
+      Assert.Null(this.stateStore.SavedStatistics);
+      Assert.Empty(this.emailSender.Sent);
+   }
+
+   [Fact]
+   public async Task DryRun_UnreadableRecord_Fails()
+   {
+      this.commandLineOptions.DryRun = true;
+      this.ddnsProvider.RecordContents["a.example.com"] = CurrentIp; // b.example.com cannot be read
+
+      bool result = await this.CreateWorker().ExecuteAsync(TestContext.Current.CancellationToken);
+
+      Assert.False(result);
+      Assert.Empty(this.ddnsProvider.Updates);
+   }
+
+   [Fact]
+   public async Task DryRun_InvalidDomain_Fails()
+   {
+      this.commandLineOptions.DryRun = true;
+      this.ddnsProvider.RecordContents["a.example.com"] = CurrentIp;
+      this.ddnsProvider.RecordContents["b.example.com"] = CurrentIp;
+      this.ddnsProvider.InvalidDomains.Add("b.example.com");
+
+      bool result = await this.CreateWorker().ExecuteAsync(TestContext.Current.CancellationToken);
+
+      Assert.False(result);
+   }
+
+   [Fact]
+   public async Task DryRun_NoExternalIp_Fails()
+   {
+      this.commandLineOptions.DryRun = true;
+      this.ipResponses[Provider1] = () => FakeHttpMessageHandler.Text(HttpStatusCode.OK, "no address here");
+      this.ipResponses[Provider2] = () => FakeHttpMessageHandler.Text(HttpStatusCode.ServiceUnavailable, "down");
+
+      bool result = await this.CreateWorker().ExecuteAsync(TestContext.Current.CancellationToken);
+
+      Assert.False(result);
+   }
+
    private static async Task WaitUntilAsync(Func<bool> condition)
    {
       DateTime deadline = DateTime.UtcNow.AddSeconds(10);
@@ -212,7 +289,8 @@ public sealed class WorkerServiceTests
          new StubHttpClientFactory(this.ipHandler),
          this.ddnsProvider,
          this.stateStore,
-         this.timeProvider);
+         this.timeProvider,
+         this.commandLineOptions);
    }
 
    // the fake clock only moves when told to; keep nudging it past each pause until the run ends

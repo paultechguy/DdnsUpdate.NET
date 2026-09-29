@@ -43,6 +43,18 @@ public interface IDdnsUpdateProvider
    Task<DdnsProviderSuccessResult> IsDomainValidAsync(string domainName);
 
    /// <summary>
+   /// Reads the domain's DNS record without changing it. Used by dry runs to prove the
+   /// credentials and record identifiers work before anything is updated.
+   /// </summary>
+   /// <param name="domainName">The domain name whose DNS record is read.</param>
+   /// <param name="cancelToken">Signaled when the application is stopping.</param>
+   /// <returns>A <see cref="DdnsProviderRecordResult"/> with the record's current value, or a
+   /// failure describing why the record could not be read or does not match the domain.</returns>
+   Task<DdnsProviderRecordResult> GetDnsRecordAsync(
+      string domainName,
+      CancellationToken cancelToken = default);
+
+   /// <summary>
    /// Updates the DNS record for the domain with the specified IP address.
    /// </summary>
    /// <param name="domainName">The domain name whose DNS record is updated (e.g. mycompany.com).</param>

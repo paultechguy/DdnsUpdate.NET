@@ -12,25 +12,30 @@ using CommandLine;
 
 /// <summary>
 /// Command-line options parsed by CommandLineParser and registered for dependency injection.
-/// No options are defined yet; the parser still provides --help and --version.
+/// The parser also provides --help and --version.
 /// </summary>
 /// <remarks>
-/// The parser rejects unknown arguments and the application then exits without running, so
-/// any new argument must be declared here first.
+/// The parser rejects unknown arguments and the application then exits with code 1 without
+/// running, so any new argument must be declared here first.
 /// </remarks>
 public class CommandLineOptions
 {
-   // See the project website to add command-line options.
-   // https://github.com/commandlineparser/commandline
+   /// <summary>
+   /// Gets or sets a value indicating whether to preview a single pass without changing anything.
+   /// </summary>
+   /// <remarks>
+   /// A dry run detects the external IP address and reads each enabled domain's DNS record from
+   /// the provider (proving the credentials and IDs work), then reports what a real run would
+   /// do. It never updates DNS, saves the last IP address or provider statistics, or sends
+   /// email. The process exits with 1 if any enabled domain has a problem.
+   /// </remarks>
+   [Option("dry-run", HelpText = "Preview one pass: detect the IP, check every enabled domain's DNS record, and report what would change. Changes nothing.")]
+   public bool DryRun { get; set; }
 
-   // Examples:
-   //
-   // [Option('d', "debug", Required = false, HelpText = "Enabled debug mode output.")]
-   // public bool DebugMode { get; set; }
-   //
-   // [Option('i', "input", Required = true, HelpText = "Input file name.")]
-   // public string InputFilePath { get; set; }
-   //
-   // [Option("threads", Required = false, Default = 12, HelpText = "Number of threads.")]
-   // public int MaxThreadCount { get; set; }
+   /// <summary>
+   /// Gets or sets a value indicating whether to run a single real pass and exit, whatever
+   /// <c>maximumDdnsUpdateIterations</c> says.
+   /// </summary>
+   [Option("once", HelpText = "Run one real update pass, then exit.")]
+   public bool Once { get; set; }
 }
