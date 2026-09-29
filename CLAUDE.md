@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-DdnsUpdate is a .NET 8 Windows app that detects the machine's external IPv4 address and pushes it to Cloudflare DNS records. The same executable runs as a Windows Service, a Scheduled Task, or an interactive console app. It was derived from the `paultechguy/WinService.Net` template, which is where `tools/RenameWinService.ps1` comes from.
+DdnsUpdate is a Windows app that detects the machine's external IPv4 address and pushes it to Cloudflare DNS records. The same executable runs as a Windows Service, a Scheduled Task, or an interactive console app. It was derived from the `paultechguy/WinService.Net` template.
+
+The exe project targets `net10.0-windows10.0.17763.0`. The library projects still target `net8.0`. Package versions are managed centrally in the root `Directory.Packages.props`, so `PackageReference` items have no `Version`.
 
 **Which line this is:** this tree is the `v0.1.0` production line plus a Cloudflare PATCH fix. The GitHub `master` branch is an unrelated history with no common ancestor. It reads settings from a `config\` subfolder and names its exe `ddnsupdate.exe` in lowercase. Both lines report version 0.1.0. Don't port `config\`-folder behavior into this tree. See `docs/BUILDING.md`.
 
@@ -24,6 +26,11 @@ dotnet publish .\DdnsUpdate.Application\DdnsUpdate.Application.csproj -c Release
 ```
 
 - There are no test projects.
+- To smoke-test a single pass, set the environment variable `applicationSettings__ddnsSettings__maximumDdnsUpdateIterations=1` and run the Debug exe.
+  - Without it, the app sleeps 60 minutes between passes.
+  - Don't pass settings as command-line arguments. CommandLineParser rejects unknown arguments, and the app then exits without running.
+  - Environment variables can also enable a fake domain, e.g. `cloudflareSettings__domains__0__isEnabled=true`. Leaving its IDs empty makes validation fail before any Cloudflare call.
+  - A run writes to `%ProgramData%\PaulTechGuy\DdnsUpdate`.
 - StyleCop.Analyzers runs at build time, configured in `src/.editorconfig`. There is no separate lint step.
 - The publish must be single-file. `FilePathHelper` and `Program.Main` use `AppDomain.CurrentDomain.BaseDirectory` because `Assembly.Location` is empty in a bundle.
 - Building from a deeply nested path can hit the 260-character limit. That shows up as a misleading `MSB9008` "referenced project does not exist" warning.
@@ -44,9 +51,11 @@ Project dependency flow: `Application` → `Service`, `Email`, `DdnsProvider.Clo
   2. Asks the provider for the enabled domains.
   3. Gets the external IP from the `ipAddressProviders` URL list, starting at a random provider and rotating on failure. Per-URL success and failure counts persist to `UriStatistics.json`.
   4. Compares the result with `LastIpAddress.txt`. If the IP is unchanged it skips the update, unless `alwaysUpdateDdnsEvenIfUnchanged` is set.
-  5. Optionally sends email, updates the domains in parallel (`parallelDdnsUpdateCount`), and sleeps `afterAllDdnsUpdatePauseMinutes`.
+  5. Optionally sends email.
+  6. Updates the domains with `Parallel.ForEachAsync` (`parallelDdnsUpdateCount`), calling `IsDomainValidAsync` before each `TryUpdateIpAddressAsync`.
+  7. Sleeps `afterAllDdnsUpdatePauseMinutes`.
 
-  `maximumDdnsUpdateIterations > 0` makes it exit after N loops, which is how Scheduled Task mode works.
+  `maximumDdnsUpdateIterations > 0` makes it exit after N loops, which is how Scheduled Task mode works. The check runs before the sleep, so the process exits immediately after its last pass.
 - **DdnsUpdate.DdnsProvider**: the `IDdnsUpdateProvider` abstraction. **DdnsUpdate.DdnsProvider.Cloudflare** implements it.
   - It reads the `cloudflareSettings` section, where a per-domain empty field falls back to `defaultDomain`.
   - It sends a **PATCH** (not PUT) to `/zones/{zoneId}/dns_records/{recordId}` using the `X-Auth-Email`/`X-Auth-Key` headers. PUT resets omitted fields such as `proxied`, which silently turns off the Cloudflare proxy. Keep it PATCH.
@@ -57,7 +66,9 @@ Runtime data (logs, `LastIpAddress.txt`, `UriStatistics.json`) lives in `%Progra
 
 ## Code style
 
-- Existing C# uses **3-space indentation**, even though `.editorconfig` says 4. Match the surrounding code.
+- C# uses **3-space indentation** (set in `.editorconfig`).
+- Save `.cs` files as UTF-8 **with BOM** and **no trailing newline**. StyleCop warns otherwise (SA1412, SA1518).
+- Public types and members get XML doc comments. Inline comments explain why, not what.
 - Every `.cs` file starts with the `PaulTechGuy` copyright/MIT header block. Put `using` directives inside the file-scoped namespace, with System first.
 - Always qualify members with `this.` (enforced as a warning). Use primary constructors that assign to `private readonly` fields.
 - Discard unused return values with `_ =` (e.g. `_ = services.AddTransient<...>()`).

@@ -18,6 +18,14 @@ using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.DdnsProvider.Models;
 using Microsoft.Extensions.Configuration;
 
+/// <summary>
+/// An <see cref="IDdnsUpdateProvider"/> that updates DNS records through the Cloudflare v4 API,
+/// using the domains in the <c>cloudflareSettings</c> configuration section.
+/// </summary>
+/// <remarks>
+/// Any empty per-domain value (zone id, record type, authorization key or email) falls back to
+/// the value in <c>cloudflareSettings.defaultDomain</c>.
+/// </remarks>
 public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvider
 {
    private readonly IConfiguration configuration = configuration;
@@ -27,6 +35,10 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
    public string ProviderName => "Cloudflare API";
 
    /// <inheritdoc/>
+   /// <remarks>
+   /// Re-reads <c>cloudflareSettings</c> so edits made while running are picked up; the other
+   /// members use the settings loaded by the most recent call to this method.
+   /// </remarks>
    public async Task<List<string>> GetDomainNamesAsync()
    {
       this.RefreshApplicationSettings();
@@ -42,17 +54,13 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
    /// <inheritdoc/>
    public async Task<DdnsProviderSuccessResult> IsDomainValidAsync(string domainName)
    {
-      // make sure we have all the proper settings; if a domain setting is missing, we just have a default instead
-
       var result = new DdnsProviderSuccessResult
       {
          IsSuccess = false,
          Message = string.Empty,
       };
 
-      CloudflareDomain? domain = this.applicationSettings.Domains
-         .Where(x => domainName.Equals(x.Name, StringComparison.OrdinalIgnoreCase))
-         .FirstOrDefault();
+      CloudflareDomain? domain = this.FindDomain(domainName);
       if (domain is null)
       {
          result.Message = $"Domain {domainName} does not exist";
@@ -62,32 +70,31 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
 
       var errorList = new List<string>();
 
-      // if domain has an empty record type, and the default is also empty...we have a problem
-      if (string.IsNullOrWhiteSpace(domain.RecordType)
-         && string.IsNullOrWhiteSpace(this.applicationSettings.DefaultDomain.RecordType))
+      // the record id identifies the DNS record itself, so it has no default
+      if (string.IsNullOrWhiteSpace(domain.RecordId))
       {
-         errorList.Add("defaultDomain must have a non-empty recordType");
+         errorList.Add("recordId is empty");
       }
 
-      // if domain has an empty auth key, and the default is also empty...we have a problem
-      if (string.IsNullOrWhiteSpace(domain.AuthorizationKey)
-         && string.IsNullOrWhiteSpace(this.applicationSettings.DefaultDomain.AuthorizationKey))
+      // every other value must be set on the domain or on defaultDomain
+      if (string.IsNullOrWhiteSpace(this.GetSettingsRecordType(domain)))
       {
-         errorList.Add("defaultDomain must have a non-empty authKey");
+         errorList.Add("recordType is empty in both the domain and defaultDomain");
       }
 
-      // if domain has an empty auth email, and the default is also empty...we have a problem
-      if (string.IsNullOrWhiteSpace(domain.AuthorizationEmail)
-         && string.IsNullOrWhiteSpace(this.applicationSettings.DefaultDomain.AuthorizationEmail))
+      if (string.IsNullOrWhiteSpace(this.GetSettingsAuthorizationKey(domain)))
       {
-         errorList.Add("defaultDomain must have a non-empty authEmail");
+         errorList.Add("authorizationKey is empty in both the domain and defaultDomain");
       }
 
-      // if domains has an empty zone id, and the default is also empty...we have a problem
-      if (string.IsNullOrWhiteSpace(domain.ZoneId)
-         && string.IsNullOrWhiteSpace(this.applicationSettings.DefaultDomain.ZoneId))
+      if (string.IsNullOrWhiteSpace(this.GetSettingsAuthorizationEmail(domain)))
       {
-         errorList.Add("defaultDomain must have a non-empty zoneId");
+         errorList.Add("authorizationEmail is empty in both the domain and defaultDomain");
+      }
+
+      if (string.IsNullOrWhiteSpace(this.GetSettingsZoneId(domain)))
+      {
+         errorList.Add("zoneId is empty in both the domain and defaultDomain");
       }
 
       result.IsSuccess = errorList.Count == 0;
@@ -95,7 +102,6 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
 
       return await Task.FromResult(result);
    }
-
 
    /// <inheritdoc/>
    public async Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(
@@ -109,9 +115,7 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
          Message = string.Empty,
       };
 
-      CloudflareDomain? domain = this.applicationSettings.Domains
-         .Where(x => domainName.Equals(x.Name, StringComparison.OrdinalIgnoreCase))
-         .FirstOrDefault();
+      CloudflareDomain? domain = this.FindDomain(domainName);
       if (domain is null)
       {
          result.Message = $"Domain {domainName} does not exist";
@@ -122,7 +126,8 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
       string error;
       try
       {
-         // we need to set these headers
+         // Global API Key authentication; the caller gives each domain its own client, so
+         // setting default headers here does not leak between domains
          client.DefaultRequestHeaders.Clear();
          client.DefaultRequestHeaders.Add("X-Auth-Email", this.GetSettingsAuthorizationEmail(domain));
          client.DefaultRequestHeaders.Add("X-Auth-Key", this.GetSettingsAuthorizationKey(domain));
@@ -134,7 +139,7 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
          {
             type = this.GetSettingsRecordType(domain),
             name = domain.Name,
-            content = ipAddress
+            content = ipAddress,
          }), Encoding.UTF8, "application/json");
 
          // Use PATCH, not PUT.  PUT is an overwrite: Cloudflare resets any field we omit
@@ -160,6 +165,12 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
    private void RefreshApplicationSettings()
    {
       this.applicationSettings = this.configuration.GetSection("cloudflareSettings").Get<CloudflareSettings>() ?? throw new InvalidOperationException();
+   }
+
+   private CloudflareDomain? FindDomain(string domainName)
+   {
+      return this.applicationSettings.Domains
+         .FirstOrDefault(x => domainName.Equals(x.Name, StringComparison.OrdinalIgnoreCase));
    }
 
    private string GetSettingsAuthorizationEmail(CloudflareDomain domain)

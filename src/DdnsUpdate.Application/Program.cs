@@ -18,6 +18,10 @@ using DdnsUpdate.Core.Models;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
+/// <summary>
+/// The application entry point: parses the command line, determines the .NET environment,
+/// configures logging, and runs the generic host (see Program_Configure.cs).
+/// </summary>
 public partial class Program : IDisposable
 {
    private const string DotNetEnvironmentVariableName = "DOTNET_ENVIRONMENT";
@@ -30,7 +34,8 @@ public partial class Program : IDisposable
    /// <param name="args">The command-line arguments.</param>
    private static void Main(string[] args)
    {
-      // first things first...need to set content root
+      // services start with the current directory set to System32; appsettings files are read
+      // relative to the current directory, so point it at the executable's directory first
       Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
 
       new Program().Run(args);
@@ -53,10 +58,11 @@ public partial class Program : IDisposable
 
          try
          {
-            // intialize and notify user of use
+            // initialize and notify user of use
             this.InitializeEnvironment();
 
             LogStarting();
+
             // build host first so we can hope to have a logger if issues come up
             IHost host = this.CreateHostBuilder().Build();
 
@@ -78,12 +84,13 @@ public partial class Program : IDisposable
             }
             else
             {
-               Log.Information(message);
+               Log.Fatal(message);
             }
          }
       })
-      .WithNotParsed(errors => // errors is a sequence of type IEnumerable<Error>
+      .WithNotParsed(errors =>
       {
+         // the parser has already written the errors (or --help/--version text) to the console
       });
 
       // final user notifications
@@ -140,6 +147,12 @@ public partial class Program : IDisposable
       this.ConfigureCtrlCHandler();
    }
 
+   /// <summary>
+   /// Determines the .NET environment name: DOTNET_ENVIRONMENT if set (its appsettings file must
+   /// exist), otherwise "development" if appsettings.development.json exists, otherwise
+   /// "production" if appsettings.production.json exists. Debug builds copy only the development
+   /// file and Release builds only the production file, so the build type picks the environment.
+   /// </summary>
    private void InitializeDotNetEnvironment()
    {
       // find out if the standard .net env variable exists; if not, try to determine

@@ -10,6 +10,14 @@ namespace DdnsUpdate.Core.Models;
 
 using CommandLine;
 
+/// <summary>
+/// Command-line options parsed by CommandLineParser and registered for dependency injection.
+/// No options are defined yet; the parser still provides --help and --version.
+/// </summary>
+/// <remarks>
+/// The parser rejects unknown arguments and the application then exits without running, so
+/// any new argument must be declared here first.
+/// </remarks>
 public class CommandLineOptions
 {
    // See the project website to add command-line options.

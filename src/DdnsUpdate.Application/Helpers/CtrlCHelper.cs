@@ -8,8 +8,16 @@
 
 namespace DdnsUpdate.Application.Helpers;
 
+/// <summary>
+/// Hooks Ctrl-C handling for interactive (console) runs.
+/// </summary>
 public static class CtrlCHelper
 {
+   /// <summary>
+   /// Registers a handler for Ctrl-C and Ctrl-Break.
+   /// </summary>
+   /// <param name="handler">The handler; set <see cref="ConsoleCancelEventArgs.Cancel"/> to true
+   /// to keep the process alive for a graceful shutdown.</param>
    public static void ConfigureCtrlCHandler(ConsoleCancelEventHandler handler)
    {
       Console.CancelKeyPress += handler;

@@ -27,12 +27,16 @@ public partial class Program
 
    private bool disposed = false;
 
+   /// <summary>
+   /// Initializes a new instance of the <see cref="Program"/> class.
+   /// </summary>
    public Program()
    {
       // keep compiler happy, but we'll overwrite this in Run()
       this.commandLineOptions = new CommandLineOptions();
    }
 
+   /// <inheritdoc/>
    public void Dispose()
    {
       // Dispose of unmanaged resources.
@@ -42,6 +46,10 @@ public partial class Program
       GC.SuppressFinalize(this);
    }
 
+   /// <summary>
+   /// Releases the cancellation token source.
+   /// </summary>
+   /// <param name="disposing">True when called from <see cref="Dispose()"/>.</param>
    protected virtual void Dispose(bool disposing)
    {
       if (this.disposed)
@@ -77,7 +85,8 @@ public partial class Program
       _ = services.AddSingleton(this.commandLineOptions);
       _ = services.AddHostedService<WindowsBackgroundService>();
 
-      // DDNS update provider...sort of a big thing
+      // DDNS update provider...sort of a big thing; register a different IDdnsUpdateProvider
+      // here to support another DNS service
       _ = services.AddTransient<IDdnsUpdateProvider, DdnsUpdate.DdnsProvider.Cloudflare.DdnsUpdateProvider>();
 
       // disable the default aspnet status messages that appear in console/log about startup
@@ -86,7 +95,9 @@ public partial class Program
 
    private IHostBuilder CreateHostBuilder()
    {
-      // build configuration first so we can use it (e.g. default service name)
+      // build configuration first so we can use it (e.g. default service name); later sources
+      // override earlier ones, so the git-ignored *.user.json file holds secrets and per-server
+      // values on top of the committed appsettings files
       IConfigurationRoot configuration = new ConfigurationBuilder()
          .SetBasePath(Directory.GetCurrentDirectory())
          .AddJsonFile($"appsettings.json", optional: false, reloadOnChange: true)

@@ -12,6 +12,10 @@ using DdnsUpdate.Core.Interfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+/// <summary>
+/// The hosted service that runs <see cref="IWorkerService"/> and stops the host when it finishes,
+/// so the same code works as a Windows Service, a scheduled task, or a console app.
+/// </summary>
 public sealed class WindowsBackgroundService(
    IWorkerService appService,
    IHostApplicationLifetime applicationLifetime,
@@ -22,6 +26,7 @@ public sealed class WindowsBackgroundService(
    private readonly IHostApplicationLifetime appLifetime = applicationLifetime;
    private readonly ILogger<WindowsBackgroundService> logger = logger;
 
+   /// <inheritdoc/>
    protected override async Task ExecuteAsync(CancellationToken cancelToken)
    {
       this.logger.LogDebug($"Starting {nameof(WindowsBackgroundService)}.{nameof(this.ExecuteAsync)}");
@@ -30,7 +35,8 @@ public sealed class WindowsBackgroundService(
       {
          await this.appService.ExecuteAsync(cancelToken);
 
-         // we need to stop the hosted service, which will ensure application exit
+         // the worker finished on its own (e.g. maximum iterations reached); without this the
+         // host would keep running with nothing to do
          this.appLifetime.StopApplication();
       }
       catch (OperationCanceledException)

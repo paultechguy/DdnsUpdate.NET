@@ -19,6 +19,14 @@ using DdnsUpdate.DdnsProvider.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
+/// <summary>
+/// The main DDNS update loop: detect the external IP address, and when it has changed,
+/// push it to every enabled domain through the <see cref="IDdnsUpdateProvider"/>.
+/// </summary>
+/// <remarks>
+/// State that must survive restarts (the last known IP address and the per-URL IP provider
+/// statistics) is kept in <see cref="FilePathHelper.ApplicationDataDirectory"/>.
+/// </remarks>
 public partial class WorkerService(
    IConfiguration configuration,
    ILogger<WorkerService> logger,
@@ -41,17 +49,16 @@ public partial class WorkerService(
    private ApplicationSettings appSettings = new();
    private UriStatistics uriStatistics = [];
 
+   /// <inheritdoc/>
    public async Task ExecuteAsync(CancellationToken cancelToken)
    {
-      // When this method exits, the application will stop.  If this is a service, you typically will
-      // stay in a "while" loop until a cancellation is requested.  If this is a schedule task or
-      // command-line console application, you may loop a few times, but there is a good chance that
-      // the method will exit fairly soon on its own (but you should still check for a cancellation
-      // request since the Ctrl-C handler will initiate a cancellation request.
+      // When this method returns, the application stops.  As a Windows Service it loops until
+      // cancellation is requested; as a Scheduled Task, maximumDdnsUpdateIterations (usually 1)
+      // ends the loop instead.  Ctrl-C in console mode also triggers a cancellation.
 
       try
       {
-         // we refresh here mainly so that any initial logging will have the proper values
+         // load settings before logging so the startup messages show the configured values
          this.RefreshApplicationSettings();
 
          this.LogInitialStartupMessages();
@@ -62,76 +69,26 @@ public partial class WorkerService(
          // just for info sake, log the last known IP address (if it exists)
          this.LogInitialIpAddress();
 
-         // loop forever until a cancellation request is seen
          int loopCounter = 0;
          while (!cancelToken.IsCancellationRequested)
          {
-            // do we need to exit based on the number of updates
+            ++loopCounter;
+
+            // settings files are reloaded on change, so pick up any edits made while running
+            this.RefreshApplicationSettings();
+
+            await this.ExecuteIterationAsync(loopCounter, cancelToken);
+
+            // check before sleeping; otherwise a Scheduled Task run would sit through a full
+            // pause interval before exiting
             if (this.IsMaximumUpdatesReached(loopCounter))
             {
                this.logger.LogInformation($"Maximum DDNS updates ({this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations}) reached; stopping");
                break;
             }
 
-            ++loopCounter;
-
-            // just to make sure we have the latest in case the settings were updated
-            // while we were executing
-            this.RefreshApplicationSettings();
-
-            List<string> updateDomainNames = await this.ddnsUpdateProvider.GetDomainNamesAsync();
-            if (updateDomainNames.Count > 0)
-            {
-               // get new and last known ip addresses
-               (string ip, UriStatisticItem? statsItem) = await this.GetIpAddressV4Async(cancelToken);
-               string lastIpAddress = this.LoadLastIpAddress();
-
-               if (string.IsNullOrWhiteSpace(ip) || statsItem is null)
-               {
-                  this.logger.LogWarning($"#{loopCounter}: Unable to determine external IP address or cancellation requested");
-                  _ = this.SleepBetweenAllIpUpdates(cancelToken);
-
-                  continue;
-               }
-               else if (lastIpAddress == ip && !this.appSettings.DdnsSettings.AlwaysUpdateDdnsEvenIfUnchanged)
-               {
-                  // ip is he same as last time, and we bypass ddns updates if they are the same
-                  this.logger.LogInformation($"#{loopCounter}: IP address {ip} unchanged using {statsItem.Uri}; skip {updateDomainNames.Count} DDNS update(s)");
-                  _ = this.SleepBetweenAllIpUpdates(cancelToken);
-
-                  continue;
-               }
-
-               // remember last ip if it's changed
-               if (ip != lastIpAddress)
-               {
-                  this.logger.LogInformation($"New IP address found: {ip}");
-                  await this.SendEmailIpAddressChangedAsync(lastIpAddress, ip, cancelToken); // optional based on config
-                  this.SaveLastIpAddress(ip);
-               }
-
-               this.logger.LogInformation($"#{loopCounter}: Current external IP is {ip} via URL {statsItem.Uri}");
-               this.logger.LogInformation($"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
-
-               // update all ddns records...woo hoo
-               this.UpdateDomainIpAddresses(updateDomainNames, loopCounter, ip, cancelToken);
-            }
-            else
-            {
-               this.logger.LogInformation($"#{loopCounter}: No enabled domains found; skip DDS update(s)");
-            }
-
-            // sleep if we're not cancelling
-            if (!cancelToken.IsCancellationRequested)
-            {
-               _ = this.SleepBetweenAllIpUpdates(cancelToken);
-            }
+            this.SleepBetweenAllIpUpdates(cancelToken);
          }
-      }
-      catch (Exception)
-      {
-         // bubble up
-         throw;
       }
       finally
       {
@@ -139,40 +96,88 @@ public partial class WorkerService(
       }
    }
 
+   /// <summary>
+   /// Performs a single pass: find the enabled domains, get the external IP, and update the
+   /// domains if the IP changed (or if updates are forced by configuration).
+   /// </summary>
+   private async Task ExecuteIterationAsync(int loopCounter, CancellationToken cancelToken)
+   {
+      List<string> updateDomainNames = await this.ddnsUpdateProvider.GetDomainNamesAsync();
+      if (updateDomainNames.Count == 0)
+      {
+         this.logger.LogInformation($"#{loopCounter}: No enabled domains found; skip DDNS update(s)");
+         return;
+      }
+
+      // get new and last known ip addresses
+      (string ip, UriStatisticItem? statsItem) = await this.GetIpAddressV4Async(cancelToken);
+      string lastIpAddress = this.LoadLastIpAddress();
+
+      if (string.IsNullOrWhiteSpace(ip) || statsItem is null)
+      {
+         this.logger.LogWarning($"#{loopCounter}: Unable to determine external IP address or cancellation requested");
+         return;
+      }
+
+      if (lastIpAddress == ip && !this.appSettings.DdnsSettings.AlwaysUpdateDdnsEvenIfUnchanged)
+      {
+         this.logger.LogInformation($"#{loopCounter}: IP address {ip} unchanged using {statsItem.Uri}; skip {updateDomainNames.Count} DDNS update(s)");
+         return;
+      }
+
+      // remember last ip if it's changed
+      if (ip != lastIpAddress)
+      {
+         this.logger.LogInformation($"New IP address found: {ip}");
+         await this.SendEmailIpAddressChangedAsync(lastIpAddress, ip, cancelToken); // optional based on config
+         this.SaveLastIpAddress(ip);
+      }
+
+      this.logger.LogInformation($"#{loopCounter}: Current external IP is {ip} via URL {statsItem.Uri}");
+      this.logger.LogInformation($"#{loopCounter}: Processing IP updates for {updateDomainNames.Count} domain(s)");
+
+      await this.UpdateDomainIpAddressesAsync(updateDomainNames, loopCounter, ip, cancelToken);
+   }
+
    private void RefreshApplicationSettings()
    {
-      // get the lastest ddns and domain settings and sanity check them; for a hosted service
-      // in the background, even using a IOptionsSnapot, you can't DI the IOptions to get the
-      // latest.  So we read them manually to keep things refreshed.
-
+      // IOptions<T> is bound once when the hosted service is created, so it would never see
+      // settings edits made while the service runs; read the section directly instead.
       this.appSettings = this.configuration.GetSection("applicationSettings").Get<ApplicationSettings>() ?? throw new InvalidOperationException();
    }
 
-   private void UpdateDomainIpAddresses(
+   private async Task UpdateDomainIpAddressesAsync(
       List<string> domainNames,
       int loopCounter,
       string ipAddress,
       CancellationToken cancelToken)
    {
+      // parallelDdnsUpdateCount: < 0 = .NET default, 0 = one per domain, > 0 = that many
       var parallelOptions = new ParallelOptions
       {
+         CancellationToken = cancelToken,
          MaxDegreeOfParallelism = this.appSettings.DdnsSettings.ParallelDdnsUpdateCount < 0
-            ? -1 // unlimited
+            ? -1
             : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount == 0
                ? domainNames.Count
                : this.appSettings.DdnsSettings.ParallelDdnsUpdateCount,
       };
 
-      Parallel.ForEach(domainNames, async domainName =>
+      try
       {
-         if (!cancelToken.IsCancellationRequested)
+         // ForEachAsync (not ForEach) so every update is awaited before the iteration ends
+         await Parallel.ForEachAsync(domainNames, parallelOptions, async (domainName, token) =>
          {
+            // a client per domain because the provider sets per-domain auth headers on it;
+            // the factory owns the handlers, so the client itself needs no disposal
             HttpClient client = this.clientFactory.CreateClient();
             _ = await this.UpdateDomainIpAddressAsync(loopCounter, ipAddress, client, domainName);
-
-            // no need to dispose of client
-         }
-      });
+         });
+      }
+      catch (OperationCanceledException)
+      {
+         // shutting down; any updates not yet started are simply skipped
+      }
    }
 
    private void LogInitialStartupMessages()
@@ -197,6 +202,16 @@ public partial class WorkerService(
       HttpClient client,
       string domainName)
    {
+      // catch configuration gaps (e.g. no zone id in the domain or the defaults) with a clear
+      // message rather than letting the provider's API reject the request
+      DdnsProviderSuccessResult validResult = await this.ddnsUpdateProvider.IsDomainValidAsync(domainName);
+      if (!validResult.IsSuccess)
+      {
+         this.logger.LogError($"#{counter}: Invalid configuration for {domainName}; {validResult.Message}");
+
+         return false;
+      }
+
       DdnsProviderSuccessResult updateResult = await this.ddnsUpdateProvider.TryUpdateIpAddressAsync(
          client,
          domainName,
@@ -213,56 +228,55 @@ public partial class WorkerService(
       return updateResult.IsSuccess;
    }
 
+   /// <summary>
+   /// Asks the configured IP address providers for the external IPv4 address, trying each in
+   /// turn until one returns a parsable address.
+   /// </summary>
+   /// <returns>The IP address and the provider that supplied it, or an empty string and null
+   /// if no provider succeeded or cancellation was requested.</returns>
    private async Task<(string IpAddress, UriStatisticItem? StatsItem)> GetIpAddressV4Async(CancellationToken cancelToken)
    {
-      // choose an random IP address provider
+      // start at a random provider (by default) to spread the load across the free services,
+      // then walk the list circularly so every provider gets one attempt
       int startIndex = this.appSettings.DdnsSettings.RandomizeIpAddressProviderSelecion
          ? this.rndIpAddressProvider.Next(this.uriStatistics.Count)
          : 0;
 
-      using var client = new HttpClient();
+      HttpClient client = this.clientFactory.CreateClient();
       for (int i = startIndex; i < startIndex + this.uriStatistics.Count; ++i)
       {
+         if (cancelToken.IsCancellationRequested)
+         {
+            return (string.Empty, null);
+         }
+
+         UriStatisticItem statsItem = this.uriStatistics[i % this.uriStatistics.Count];
+
          try
          {
-            if (cancelToken.IsCancellationRequested)
-            {
-               return (string.Empty, null);
-            }
-
-            // what is the true index to use
-            int providerIndex = i % this.uriStatistics.Count;
-            UriStatisticItem statsItem = this.uriStatistics[providerIndex];
-
-            // get an IP address as a string, and clean it up a bit just in case it's not pretty
-            try
-            {
-               string externalIp = await new HttpClient().GetStringAsync(statsItem.Uri, cancelToken);
-
-               // does this text contain an ip address
-               if (!this.TryParseIpAddress(externalIp, out IPAddress? ipAddress))
-               {
-                  statsItem.IncrementFailCount();
-
-                  continue;
-               }
-
-               // increment this uri stats and rewrite stats file
-               statsItem.IncrementSuccessCount();
-               await this.SaveUriStatisticsAsync();
-
-               return (ipAddress!.ToString(), statsItem);
-            }
-            catch (Exception)
+            // providers return plain text, sometimes with extra whitespace or markup
+            string externalIp = await client.GetStringAsync(statsItem.Uri, cancelToken);
+            if (!this.TryParseIpAddress(externalIp, out IPAddress? ipAddress))
             {
                statsItem.IncrementFailCount();
 
                continue;
             }
+
+            // the stats file is written on success only; fail counts ride along with the next save
+            statsItem.IncrementSuccessCount();
+            await this.SaveUriStatisticsAsync();
+
+            return (ipAddress!.ToString(), statsItem);
          }
-         catch
+         catch (OperationCanceledException) when (cancelToken.IsCancellationRequested)
          {
-            // ignore and try again
+            return (string.Empty, null);
+         }
+         catch (Exception)
+         {
+            // unreachable or failing provider; try the next one
+            statsItem.IncrementFailCount();
          }
       }
 
@@ -281,16 +295,9 @@ public partial class WorkerService(
          return false;
       }
 
+      // the regex accepts octets above 255, so let IPAddress have the final say
       string foundIp = match.Groups["IpAddress"].Value;
-      if (!IPAddress.TryParse(foundIp, out ipAddress))
-      {
-         // hum...something must be wrong with our regex
-         this.logger.LogError($"Internal bug, unable to convert string into IP address: {foundIp}");
-
-         return false;
-      }
-
-      return true;
+      return IPAddress.TryParse(foundIp, out ipAddress);
    }
 
    private async Task SendEmailIpAddressChangedAsync(
@@ -303,47 +310,53 @@ public partial class WorkerService(
          return;
       }
 
-      if (!this.appSettings.WorkerServiceSettings.MessageIsEnabled)
+      WorkerServiceSettings settings = this.appSettings.WorkerServiceSettings;
+      if (!settings.MessageIsEnabled)
       {
          this.logger.LogWarning("Email support disabled.  See appSettings.WorkerServiceSettings.MessageIsEnabled");
 
          return;
       }
 
-      string appName = FilePathHelper.ApplicationName;
-
-      // if it appears we have email settings, send an email if we pass validation
-      if (!string.IsNullOrWhiteSpace(this.appSettings.WorkerServiceSettings.MessageFromEmailAddress)
-         && !string.IsNullOrWhiteSpace(this.appSettings.WorkerServiceSettings.MessageToEmailAddress))
+      // To and From are both required; without them there is nothing to send
+      if (string.IsNullOrWhiteSpace(settings.MessageFromEmailAddress)
+         || string.IsNullOrWhiteSpace(settings.MessageToEmailAddress))
       {
-         string oldIp = string.IsNullOrWhiteSpace(oldIpAddress) ? "N/A" : oldIpAddress;
-         string subject = $"IP address update from {appName}, {DateTime.Now:G}";
-         string body = $$"""
-            <html><head></head><body>
-            <p><b>Old IP Address Change</b>: <span>{{oldIp}}</span></p>
-            <p><b>New IP Address Change</b>: <span>{{newIpAddress}}</span></p>
-            <p>/{{appName}}</p>
-            </body></html>
-            """;
+         this.logger.LogWarning("Email support enabled, but messageToEmailAddress or messageFromEmailAddress is empty; no email sent");
 
-         try
-         {
-            await this.emailSender.SendHtmlAsync(
-               this.appSettings.WorkerServiceSettings.MessageFromEmailAddress,
-               this.appSettings.WorkerServiceSettings.MessageToEmailAddress,
-               subject,
-               body);
+         return;
+      }
 
-            this.logger.LogInformation("IP address email sent; To: {to}, Subject: {subject}", this.appSettings.WorkerServiceSettings.MessageToEmailAddress, subject);
-         }
-         catch (Exception ex)
-         {
-            this.logger.LogError($"IP address email send failed: {ex.Message}");
-         }
+      string appName = FilePathHelper.ApplicationName;
+      string oldIp = string.IsNullOrWhiteSpace(oldIpAddress) ? "N/A" : oldIpAddress;
+      string subject = $"IP address update from {appName}, {DateTime.Now:G}";
+      string body = $$"""
+         <html><head></head><body>
+         <p><b>Old IP Address Change</b>: <span>{{oldIp}}</span></p>
+         <p><b>New IP Address Change</b>: <span>{{newIpAddress}}</span></p>
+         <p>/{{appName}}</p>
+         </body></html>
+         """;
+
+      try
+      {
+         await this.emailSender.SendAsync(
+            settings.MessageFromEmailAddress,
+            settings.MessageToEmailAddress,
+            subject,
+            replyTo: string.IsNullOrWhiteSpace(settings.MessageReplyToEmailAddress) ? null : settings.MessageReplyToEmailAddress,
+            bodyHtml: body);
+
+         this.logger.LogInformation("IP address email sent; To: {to}, Subject: {subject}", settings.MessageToEmailAddress, subject);
+      }
+      catch (Exception ex)
+      {
+         // email is a courtesy; never let it stop the DNS updates
+         this.logger.LogError($"IP address email send failed: {ex.Message}");
       }
    }
 
-   private bool SleepBetweenAllIpUpdates(CancellationToken cancelToken)
+   private void SleepBetweenAllIpUpdates(CancellationToken cancelToken)
    {
       const int OneMinuteMs = 60000;
       int pauseMinutes = this.appSettings.DdnsSettings.AfterAllDdnsUpdatePauseMinutes;
@@ -352,12 +365,11 @@ public partial class WorkerService(
       if (pauseMinutes <= 0)
       {
          this.logger.LogWarning($"Configuration property {nameof(this.appSettings.DdnsSettings.AfterAllDdnsUpdatePauseMinutes)} may be missing; defaulting to one minute pause");
-         pauseMinutes = OneMinuteMs;
+         pauseMinutes = 1;
       }
 
-      bool wasCanceled = cancelToken.WaitHandle.WaitOne(pauseMinutes * OneMinuteMs);
-
-      return wasCanceled;
+      // returns early if cancellation is requested (e.g. service stop or Ctrl-C)
+      _ = cancelToken.WaitHandle.WaitOne(pauseMinutes * OneMinuteMs);
    }
 
    private string LoadLastIpAddress()
@@ -388,6 +400,7 @@ public partial class WorkerService(
 
    private bool IsMaximumUpdatesReached(int loopCounter)
    {
+      // zero (the default) means run forever
       bool maxUpdatesReached = this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations > 0
          && loopCounter >= this.appSettings.DdnsSettings.MaximumDdnsUpdateIterations;
 
@@ -402,10 +415,9 @@ public partial class WorkerService(
       }
       catch (Exception ex)
       {
+         // not critical; the counts stay in memory and the next successful lookup saves them
+         // (a common cause is an editor holding the file open)
          this.logger.LogWarning($"Unable to save {nameof(UriStatistics)}; will try again next iteration  ({ex.Message})");
-
-         // just continue and hopefully thing will work the next time
-         // (maybe an editor has the file locked)
       }
    }
 
@@ -418,7 +430,8 @@ public partial class WorkerService(
          this.uriStatistics = await UriStatistics.ReadFileAsync(filePath);
       }
 
-      // merge in any uris from the settings
+      // add any providers configured since the stats file was written; providers removed
+      // from the settings remain in the file and are still used
       this.uriStatistics.Merge(this.appSettings.DdnsSettings.IpAddressProviders);
    }
 
@@ -432,6 +445,7 @@ public partial class WorkerService(
       return Path.Combine(FilePathHelper.ApplicationDataDirectory, UriStatisticsFileName);
    }
 
+   // finds the first dotted-quad in a provider's response; IPAddress.TryParse validates it
    [GeneratedRegex(@"(?<IpAddress>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", RegexOptions.Multiline)]
    private static partial Regex EmbeddedIpAddressRegEx();
 }

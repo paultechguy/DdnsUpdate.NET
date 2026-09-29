@@ -9,30 +9,30 @@
 namespace DdnsUpdate.DdnsProvider.Cloudflare.Models;
 
 /// <summary>
-/// A class representing the appSettings configuration section for the Cloudflare
-/// <see cref="DdnsUpdateProvider"/>.
+/// The Cloudflare provider settings, bound from the top-level <c>cloudflareSettings</c> section.
 /// </summary>
 public class CloudflareSettings
 {
    /// <summary>
    /// The name of the <see cref="CloudflareSettings"/> configuration section in
-   /// the appSettings file(s).
+   /// the appsettings file(s).
    /// </summary>
    public const string ConfigurationName = "CloudflareSettings";
 
    /// <summary>
-   /// The <see cref="CloudflareDefaultDomain"/> object properties to use when
-   /// the Domains object properties do not contain a value.
+   /// Gets or sets the <see cref="CloudflareDefaultDomain"/> values to use when
+   /// the corresponding <see cref="Domains"/> values are empty.
    /// </summary>
    public CloudflareDefaultDomain DefaultDomain { get; set; }
 
    /// <summary>
-   /// A collection of <see cref="CloudflareDomain"/> object configurations.
+   /// Gets or sets the DNS records to update; only those with
+   /// <see cref="CloudflareDomain.IsEnabled"/> set are used.
    /// </summary>
    public CloudflareDomain[] Domains { get; set; }
 
    /// <summary>
-   /// Creates a new instance of the <see cref="CloudflareSettings"/> class.
+   /// Initializes a new instance of the <see cref="CloudflareSettings"/> class.
    /// </summary>
    public CloudflareSettings()
    {

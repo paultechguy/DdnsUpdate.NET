@@ -9,19 +9,18 @@
 namespace DdnsUpdate.DdnsProvider.Models;
 
 /// <summary>
-/// A class representing a genereralized result object with a success indicator
-/// and a message.
+/// The outcome of a DDNS provider operation. Providers report failures through this result
+/// rather than by throwing.
 /// </summary>
 public class DdnsProviderSuccessResult
 {
    /// <summary>
-   /// Gets or sets the a value indicating whether the result is successful.
+   /// Gets or sets a value indicating whether the operation succeeded.
    /// </summary>
    public bool IsSuccess { get; set; } = false;
 
    /// <summary>
-   /// Gets or sets the message of the result.  Genrally this is empty if the
-   /// status is successful.
+   /// Gets or sets the failure description. Generally this is empty if the operation succeeded.
    /// </summary>
    public string Message { get; set; } = string.Empty;
 }
