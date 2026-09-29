@@ -43,6 +43,10 @@ public partial class Program : IDisposable
 
    private void Run(string[] args)
    {
+      // 0 = success; 1 = failure, which also lets Windows Service recovery options restart the
+      // service. WindowsBackgroundService sets Environment.ExitCode if the worker fails.
+      int exitCode = 0;
+
       ParserResult<CommandLineOptions> result = Parser.Default.ParseArguments<CommandLineOptions>(args)
       .WithParsed(cmdLineOptions =>
       {
@@ -51,7 +55,7 @@ public partial class Program : IDisposable
 
          // init logger almost first so other startup stuff can use it;
          // the initial bootstrap logger is able to log errors during start-up;
-         // it is replaced by the logger configured in `UseSerilog()`
+         // it is replaced by the logger configured by AddSerilog()
          Log.Logger = new LoggerConfiguration()
              .WriteTo.Console()
              .CreateBootstrapLogger();
@@ -64,33 +68,36 @@ public partial class Program : IDisposable
             LogStarting();
 
             // build host first so we can hope to have a logger if issues come up
-            IHost host = this.CreateHostBuilder().Build();
+            using IHost host = this.CreateHost(args);
 
             //
             // run the service!
             //
-            host.RunAsync(this.cancelTokenSource.Token).Wait();
+            host.RunAsync(this.cancelTokenSource.Token).GetAwaiter().GetResult();
+
+            exitCode = Environment.ExitCode;
          }
          catch (Exception ex)
          {
-            string message = $"Top-level application exception caught: {ex}";
+            exitCode = 1;
 
             // logger never initialized successfully
             if (Log.Logger.GetType().Name == "SilentLogger")
             {
                Console.ForegroundColor = ConsoleColor.Red;
-               Console.Error.WriteLine(message);
+               Console.Error.WriteLine($"Top-level application exception caught: {ex}");
                Console.ResetColor();
             }
             else
             {
-               Log.Fatal(message);
+               Log.Fatal(ex, "Top-level application exception caught");
             }
          }
       })
       .WithNotParsed(errors =>
       {
          // the parser has already written the errors (or --help/--version text) to the console
+         exitCode = errors.IsHelp() || errors.IsVersion() ? 0 : 1;
       });
 
       // final user notifications
@@ -99,31 +106,22 @@ public partial class Program : IDisposable
       // all done...close logger
       CloseLogger();
 
-      // Terminate this process and return an exit code to the operating system.
-      // This is required to avoid the 'BackgroundServiceExceptionBehavior', which
-      // performs one of two scenarios:
-      // 1. When set to "Ignore": will do nothing at all, errors cause zombie services.
-      // 2. When set to "StopHost": will cleanly stop the host, and log errors.
-      //
-      // In order for the Windows Service Management system to leverage configured
-      // recovery options, we need to terminate the process with a non-zero exit code.
-
-      Environment.Exit(1);
+      Environment.Exit(exitCode);
    }
 
    private static void LogStarting()
    {
-      Log.Information($"Starting {FilePathHelper.ApplicationName} by {FilePathHelper.CompanyName}, v{Assembly.GetExecutingAssembly().GetName().Version}");
+      Log.Information("Starting {Application} by {Company}, v{Version}", FilePathHelper.ApplicationName, FilePathHelper.CompanyName, Assembly.GetExecutingAssembly().GetName().Version);
 
       if (Environment.UserInteractive)
       {
-         Log.Information("{msg}", $"Press Ctrl-C to cancel");
+         Log.Information("Press Ctrl-C to cancel");
       }
    }
 
    private static void LogStopping()
    {
-      Log.Information($"Stopping {FilePathHelper.ApplicationName}");
+      Log.Information("Stopping {Application}", FilePathHelper.ApplicationName);
    }
 
    private static void CloseLogger()
@@ -141,7 +139,7 @@ public partial class Program : IDisposable
    private void InitializeEnvironment()
    {
       this.InitializeDotNetEnvironment();
-      Log.Information("{environment}", $"{this.dotnetEnvironmentName.ToUpper()} environment detected");
+      Log.Information("{Environment} environment detected", this.dotnetEnvironmentName.ToUpper());
 
       // allow ctrl-c in case running in console mode
       this.ConfigureCtrlCHandler();
@@ -156,7 +154,7 @@ public partial class Program : IDisposable
    private void InitializeDotNetEnvironment()
    {
       // find out if the standard .net env variable exists; if not, try to determine
-      // it by the existance of an appsetting file; play it safe and default the
+      // it by the existence of an appsettings file; play it safe and default the
       // dev environment over production
       string? envName = Environment.GetEnvironmentVariable(DotNetEnvironmentVariableName);
       if (!string.IsNullOrWhiteSpace(envName))
@@ -195,7 +193,7 @@ public partial class Program : IDisposable
 
       // no dotnet env variable exists and no development or production appsettings exist;
       // we need something so this is, well, bad
-      throw new ApplicationException($"Unable to determine DOTNET environment; no environment variable, no appsettings.{{enviroment}}.json");
+      throw new ApplicationException($"Unable to determine DOTNET environment; no environment variable, no appsettings.{{environment}}.json");
    }
 
    private void ConfigureCtrlCHandler()

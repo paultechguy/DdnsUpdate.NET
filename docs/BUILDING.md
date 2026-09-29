@@ -19,8 +19,10 @@ the settings location or the executable name casing instead.
 
 ## Prerequisites
 
-.NET SDK 8.0 or later. The projects target `net8.0`; a newer SDK builds them
-fine. All packages resolve from nuget.org.
+.NET SDK 10.0 (pinned by `global.json`, which allows any later 10.0 feature
+band). The libraries target `net10.0` and the executable targets
+`net10.0-windows10.0.17763.0`. All packages resolve from nuget.org, with versions
+managed centrally in `Directory.Packages.props`.
 
 ## Build
 
@@ -28,6 +30,15 @@ Open `src\DdnsUpdate.sln` in Visual Studio, or from the repository root:
 
 ```powershell
 cd src
+dotnet publish .\DdnsUpdate.Application -p:PublishProfile=win-x64-single
+```
+
+The `win-x64-single` publish profile
+(`DdnsUpdate.Application\Properties\PublishProfiles\win-x64-single.pubxml`)
+sets Release, `win-x64`, self-contained, single file, and the `src\publish`
+output folder. It is equivalent to:
+
+```powershell
 dotnet publish .\DdnsUpdate.Application\DdnsUpdate.Application.csproj `
   -c Release `
   -r win-x64 `
@@ -53,8 +64,8 @@ characters by default, and project references fail past that with a misleading
 
 | Option | Command change | Result |
 | --- | --- | --- |
-| Self-contained | as written above | About 70 MB. Runs with no .NET runtime installed. |
-| Framework-dependent | drop `--self-contained true` | A few MB. Requires the .NET 8 runtime on the target machine. |
+| Self-contained | as written above | About 100 MB. Runs with no .NET runtime installed. |
+| Framework-dependent | add `--self-contained false` (or edit the profile) | A few MB. Requires the .NET 10 runtime on the target machine. |
 
 Check the size of the executable already in production to see which was used
 last time. Either works.
@@ -99,6 +110,11 @@ address it skips every domain.
 To force real API calls, temporarily set `alwaysUpdateDdnsEvenIfUnchanged` to
 `true` under `applicationSettings.ddnsSettings`, run once, confirm every domain
 reports success, then set it back to `false`.
+
+The process exit code is 0 when a run finishes normally, including stopping
+after `maximumDdnsUpdateIterations`, and 1 when startup fails (for example an
+invalid `ipAddressProviders` URL) or the update loop throws. A Windows Service
+that exits with 1 triggers its configured recovery actions.
 
 For Cloudflare-proxied records, confirm afterwards that the orange cloud is
 still on. This version sends a PATCH so that omitted fields such as `proxied`

@@ -19,12 +19,12 @@ using Microsoft.Extensions.Options;
 /// An <see cref="IEmailSender"/> that sends through the SMTP server configured in
 /// <c>applicationSettings.emailSmtpSettings</c>.
 /// </summary>
-public class EmailSender(
-   IOptions<ApplicationSettings> appSettings)
+public sealed class EmailSender(
+   IOptionsMonitor<ApplicationSettings> appSettingsMonitor)
    : IEmailSender
 {
-   // note: IOptions is read once, so SMTP settings changes need an application restart
-   private readonly ApplicationSettings appSettings = appSettings.Value;
+   // a monitor rather than IOptions so SMTP settings edits apply without a restart
+   private readonly IOptionsMonitor<ApplicationSettings> appSettingsMonitor = appSettingsMonitor;
 
    /// <inheritdoc/>
    public async Task SendPlainAsync(
@@ -75,14 +75,15 @@ public class EmailSender(
          message.AlternateViews.Add(htmlView);
       }
 
-      using var client = new SmtpClient(this.appSettings.EmailSmtpSettings.SmtpHost, this.appSettings.EmailSmtpSettings.SmtpPort);
-      client.EnableSsl = this.appSettings.EmailSmtpSettings.SmtpEnableSsl;
+      EmailSmtpSettings smtp = this.appSettingsMonitor.CurrentValue.EmailSmtpSettings;
+      using var client = new SmtpClient(smtp.SmtpHost, smtp.SmtpPort);
+      client.EnableSsl = smtp.SmtpEnableSsl;
 
       // no username means an unauthenticated server (e.g. Papercut-SMTP on localhost)
-      client.UseDefaultCredentials = string.IsNullOrWhiteSpace(this.appSettings.EmailSmtpSettings.SmtpUsername);
+      client.UseDefaultCredentials = string.IsNullOrWhiteSpace(smtp.SmtpUsername);
       if (!client.UseDefaultCredentials)
       {
-         client.Credentials = new NetworkCredential(this.appSettings.EmailSmtpSettings.SmtpUsername, this.appSettings.EmailSmtpSettings.SmtpPassword);
+         client.Credentials = new NetworkCredential(smtp.SmtpUsername, smtp.SmtpPassword);
       }
 
       await client.SendMailAsync(message);

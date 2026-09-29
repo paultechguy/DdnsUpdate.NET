@@ -29,15 +29,11 @@ public sealed class WindowsBackgroundService(
    /// <inheritdoc/>
    protected override async Task ExecuteAsync(CancellationToken cancelToken)
    {
-      this.logger.LogDebug($"Starting {nameof(WindowsBackgroundService)}.{nameof(this.ExecuteAsync)}");
+      this.logger.LogDebug("Starting {Class}.{Method}", nameof(WindowsBackgroundService), nameof(this.ExecuteAsync));
 
       try
       {
          await this.appService.ExecuteAsync(cancelToken);
-
-         // the worker finished on its own (e.g. maximum iterations reached); without this the
-         // host would keep running with nothing to do
-         this.appLifetime.StopApplication();
       }
       catch (OperationCanceledException)
       {
@@ -46,11 +42,18 @@ public sealed class WindowsBackgroundService(
       }
       catch (Exception ex)
       {
-         this.logger.LogError($"Exception in {nameof(WindowsBackgroundService)}: {ex}");
+         this.logger.LogError(ex, "Exception in {Class}", nameof(WindowsBackgroundService));
+
+         // a non-zero exit code lets Windows Service recovery options restart the service
+         Environment.ExitCode = 1;
+      }
+      finally
+      {
+         // whether the worker finished on its own (e.g. maximum iterations reached) or failed,
+         // stop the host; otherwise it would keep running as a zombie with nothing to do
+         this.appLifetime.StopApplication();
       }
 
-      this.logger.LogInformation($"Ending {nameof(WindowsBackgroundService)}.{nameof(this.ExecuteAsync)}");
-
-      return;
+      this.logger.LogInformation("Ending {Class}.{Method}", nameof(WindowsBackgroundService), nameof(this.ExecuteAsync));
    }
 }

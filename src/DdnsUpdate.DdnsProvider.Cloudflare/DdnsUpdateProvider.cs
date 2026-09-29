@@ -11,12 +11,12 @@ namespace DdnsUpdate.DdnsProvider.Cloudflare;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
-using System.Text;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 using DdnsUpdate.DdnsProvider.Cloudflare.Models;
 using DdnsUpdate.DdnsProvider.Interfaces;
 using DdnsUpdate.DdnsProvider.Models;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 /// <summary>
 /// An <see cref="IDdnsUpdateProvider"/> that updates DNS records through the Cloudflare v4 API,
@@ -24,48 +24,50 @@ using Microsoft.Extensions.Configuration;
 /// </summary>
 /// <remarks>
 /// Any empty per-domain value (zone id, record type, authorization key or email) falls back to
-/// the value in <c>cloudflareSettings.defaultDomain</c>.
+/// the value in <c>cloudflareSettings.defaultDomain</c>. Register with
+/// <see cref="CloudflareServiceCollectionExtensions.AddCloudflareDdnsProvider"/>.
 /// </remarks>
-public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvider
+public sealed class DdnsUpdateProvider(
+   IOptionsMonitor<CloudflareSettings> settingsMonitor,
+   IHttpClientFactory clientFactory)
+   : IDdnsUpdateProvider
 {
-   private readonly IConfiguration configuration = configuration;
-   private CloudflareSettings applicationSettings = new();
+   /// <summary>
+   /// The name of the <see cref="HttpClient"/> configured for the Cloudflare API.
+   /// </summary>
+   public const string HttpClientName = "Cloudflare";
+
+   private readonly IOptionsMonitor<CloudflareSettings> settingsMonitor = settingsMonitor;
+   private readonly IHttpClientFactory clientFactory = clientFactory;
+   private CloudflareSettings applicationSettings = settingsMonitor.CurrentValue;
 
    /// <inheritdoc/>
    public string ProviderName => "Cloudflare API";
 
    /// <inheritdoc/>
    /// <remarks>
-   /// Re-reads <c>cloudflareSettings</c> so edits made while running are picked up; the other
-   /// members use the settings loaded by the most recent call to this method.
+   /// Takes a fresh snapshot of <c>cloudflareSettings</c> so edits made while running are picked
+   /// up; the other members use that snapshot, keeping a whole pass on consistent settings.
    /// </remarks>
-   public async Task<List<string>> GetDomainNamesAsync()
+   public Task<List<string>> GetDomainNamesAsync()
    {
-      this.RefreshApplicationSettings();
+      this.applicationSettings = this.settingsMonitor.CurrentValue;
 
-      var enabledDomains = this.applicationSettings.Domains
+      List<string> enabledDomains = this.applicationSettings.Domains
          .Where(x => x.IsEnabled)
          .Select(x => x.Name)
          .ToList();
 
-      return await Task.FromResult(enabledDomains);
+      return Task.FromResult(enabledDomains);
    }
 
    /// <inheritdoc/>
-   public async Task<DdnsProviderSuccessResult> IsDomainValidAsync(string domainName)
+   public Task<DdnsProviderSuccessResult> IsDomainValidAsync(string domainName)
    {
-      var result = new DdnsProviderSuccessResult
-      {
-         IsSuccess = false,
-         Message = string.Empty,
-      };
-
       CloudflareDomain? domain = this.FindDomain(domainName);
       if (domain is null)
       {
-         result.Message = $"Domain {domainName} does not exist";
-
-         return await Task.FromResult(result);
+         return Task.FromResult(Failure($"Domain {domainName} does not exist"));
       }
 
       var errorList = new List<string>();
@@ -97,74 +99,63 @@ public class DdnsUpdateProvider(IConfiguration configuration) : IDdnsUpdateProvi
          errorList.Add("zoneId is empty in both the domain and defaultDomain");
       }
 
-      result.IsSuccess = errorList.Count == 0;
-      result.Message = result.IsSuccess ? string.Empty : string.Join(", ", errorList);
-
-      return await Task.FromResult(result);
+      return Task.FromResult(errorList.Count == 0
+         ? new DdnsProviderSuccessResult { IsSuccess = true }
+         : Failure(string.Join(", ", errorList)));
    }
 
    /// <inheritdoc/>
    public async Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(
-      HttpClient client,
       string domainName,
-      string ipAddress)
+      string ipAddress,
+      CancellationToken cancelToken = default)
    {
-      var result = new DdnsProviderSuccessResult
-      {
-         IsSuccess = false,
-         Message = string.Empty,
-      };
-
       CloudflareDomain? domain = this.FindDomain(domainName);
       if (domain is null)
       {
-         result.Message = $"Domain {domainName} does not exist";
-
-         return await Task.FromResult(result);
+         return Failure($"Domain {domainName} does not exist");
       }
 
-      string error;
       try
       {
-         // Global API Key authentication; the caller gives each domain its own client, so
-         // setting default headers here does not leak between domains
-         client.DefaultRequestHeaders.Clear();
-         client.DefaultRequestHeaders.Add("X-Auth-Email", this.GetSettingsAuthorizationEmail(domain));
-         client.DefaultRequestHeaders.Add("X-Auth-Key", this.GetSettingsAuthorizationKey(domain));
-
+         // relative to the client's base address (see AddCloudflareDdnsProvider)
          string zoneId = this.GetSettingsZoneId(domain);
-         string url = $"https://api.cloudflare.com/client/v4/zones/{zoneId}/dns_records/{domain.RecordId}";
+         using var request = new HttpRequestMessage(HttpMethod.Patch, $"zones/{zoneId}/dns_records/{domain.RecordId}");
 
-         var content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new
-         {
-            type = this.GetSettingsRecordType(domain),
-            name = domain.Name,
-            content = ipAddress,
-         }), Encoding.UTF8, "application/json");
+         // Global API Key authentication; headers go on the request, not the client, because
+         // domains are updated in parallel and may use different credentials
+         request.Headers.Add("X-Auth-Email", this.GetSettingsAuthorizationEmail(domain));
+         request.Headers.Add("X-Auth-Key", this.GetSettingsAuthorizationKey(domain));
 
          // Use PATCH, not PUT.  PUT is an overwrite: Cloudflare resets any field we omit
          // back to its default, which silently turns off the proxy (proxied=false) on
          // proxied records.  PATCH changes only the fields we send.
-         HttpResponseMessage response = await client.PatchAsync(url, content);
-         error = response.IsSuccessStatusCode
-               ? string.Empty
-               : $"{response.StatusCode}: {response.ReasonPhrase}; {await response.Content.ReadAsStringAsync()}";
+         request.Content = JsonContent.Create(new
+         {
+            type = this.GetSettingsRecordType(domain),
+            name = domain.Name,
+            content = ipAddress,
+         });
+
+         HttpClient client = this.clientFactory.CreateClient(HttpClientName);
+         using HttpResponseMessage response = await client.SendAsync(request, cancelToken);
+         if (!response.IsSuccessStatusCode)
+         {
+            string body = (await response.Content.ReadAsStringAsync(cancelToken)).Trim();
+            return Failure($"{response.StatusCode}: {response.ReasonPhrase}; {body}");
+         }
+
+         return new DdnsProviderSuccessResult { IsSuccess = true };
       }
       catch (Exception ex)
       {
-         error = $"Exception, unable to update IP address for domain {domain.Name}, {ex.Message}";
+         return Failure($"Exception, unable to update IP address for domain {domain.Name}, {ex.Message}");
       }
-
-      return new DdnsProviderSuccessResult
-      {
-         IsSuccess = string.IsNullOrWhiteSpace(error),
-         Message = error,
-      };
    }
 
-   private void RefreshApplicationSettings()
+   private static DdnsProviderSuccessResult Failure(string message)
    {
-      this.applicationSettings = this.configuration.GetSection("cloudflareSettings").Get<CloudflareSettings>() ?? throw new InvalidOperationException();
+      return new DdnsProviderSuccessResult { IsSuccess = false, Message = message };
    }
 
    private CloudflareDomain? FindDomain(string domainName)

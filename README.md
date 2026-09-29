@@ -49,7 +49,7 @@ Settings are read from these files in the application directory, in order; a val
 
 We recommend putting your own values, especially the Cloudflare key and any SMTP password, in `appsettings.production.user.json`.  It only needs the properties you want to override, and because it is not part of the release, installing a new version of the application never overwrites it.  The examples below show the JSON sections to add; place them inside the file's outer `{ }`.
 
-Settings are re-read on every update pass, so most changes take effect without restarting the application.  The email server settings (`emailSmtpSettings`) are the exception and require a restart.
+Settings files are watched for changes, so edits take effect on the next update pass without restarting the application.
 
 ### Gathering your Cloudflare values
 To add DNS configurations, you will need to gather some information from your Cloudflare account.  For each domain, you will need the `Domain name`, `zone ID`, and the `record ID`.  In addition, for authenticating with the Cloudflare API, you will need your `authorization email` and `authorization key`.  Using your Cloudflare account, you can obtain these values:
@@ -241,7 +241,7 @@ Using Windows Task Scheduler, create a task and add an Action. Set the `Program/
 
 Each time the task is triggered by the Windows Task Scheduler, it will check the external IP address, update all DNS records if it has changed, and then exit.  It is up to you to set the number of times the task is executed over a period of time (i.e. Triggers) in the Windows Task Scheduler.
 
->The application always exits with code 1 so that Windows Service recovery options work, so Task Scheduler will show a *Last Run Result* of `0x1` even for a successful run.  Check the log file to confirm the outcome.
+>The application exits with code 0 after a normal run, so Task Scheduler shows a *Last Run Result* of `0x0`.  An exit code of 1 (`0x1`) means the application could not start or hit an unexpected error; check the log file for details.  Individual domain update failures are logged but do not change the exit code.
 
 ## License
 [MIT](LICENSE.txt)

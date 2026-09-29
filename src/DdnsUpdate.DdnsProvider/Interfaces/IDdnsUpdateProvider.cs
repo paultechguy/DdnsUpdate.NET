@@ -17,8 +17,9 @@ using DdnsUpdate.DdnsProvider.Models;
 /// <remarks>
 /// Each update pass calls <see cref="GetDomainNamesAsync"/> first, then, for each domain,
 /// <see cref="IsDomainValidAsync(string)"/> followed by
-/// <see cref="TryUpdateIpAddressAsync(HttpClient, string, string)"/>. Domain updates may run
-/// in parallel. Providers read their own configuration section.
+/// <see cref="TryUpdateIpAddressAsync(string, string, CancellationToken)"/>. Domain updates may
+/// run in parallel. Providers read their own configuration section and own their HTTP clients,
+/// and should be registered through an IServiceCollection extension in the provider's project.
 /// </remarks>
 public interface IDdnsUpdateProvider
 {
@@ -42,16 +43,15 @@ public interface IDdnsUpdateProvider
    Task<DdnsProviderSuccessResult> IsDomainValidAsync(string domainName);
 
    /// <summary>
-   /// Using the client, updates the DNS record for the domain with the specified IP address.
+   /// Updates the DNS record for the domain with the specified IP address.
    /// </summary>
-   /// <param name="client">A <see cref="HttpClient"/> for this domain only; the provider may set
-   /// its default headers. Do not dispose of the client.</param>
    /// <param name="domainName">The domain name whose DNS record is updated (e.g. mycompany.com).</param>
    /// <param name="ipAddress">The IP address to use for the DNS update.</param>
+   /// <param name="cancelToken">Signaled when the application is stopping.</param>
    /// <returns>A <see cref="DdnsProviderSuccessResult"/>; failures are reported here rather
    /// than thrown.</returns>
    Task<DdnsProviderSuccessResult> TryUpdateIpAddressAsync(
-      HttpClient client,
       string domainName,
-      string ipAddress);
+      string ipAddress,
+      CancellationToken cancelToken = default);
 }

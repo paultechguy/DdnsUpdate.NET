@@ -222,8 +222,8 @@ dotnet_naming_style.begins_with_i.capitalization = pascal_case
 
 # OTHER GENERAL
 
-# Should not apply when log message template is a resource string (temp bug with analysis)
-dotnet_diagnostic.CA2254.severity = none
+# Log messages must be constant templates (structured logging), not interpolated strings
+dotnet_diagnostic.CA2254.severity = warning
 
 # ----------------------------------------------------------------------------------------------------------------------
 # SyleCop.Analyzers rules - note that the URLs below are for tag 1.1.118
