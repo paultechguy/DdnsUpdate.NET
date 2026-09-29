@@ -14,6 +14,16 @@
   </Folder>
   <Folder Name="/docs/">
     <File Path="docs/BUILDING.md" />
+    <File Path="docs/Releasing.md" />
+  </Folder>
+  <Folder Name="/build/">
+    <File Path="build/New-Release.ps1" />
+    <File Path="build/New-ReleaseNotes.ps1" />
+    <File Path="build/Publish-Release.ps1" />
+    <File Path="build/ReadMe.md" />
+    <File Path="build/release-footer-template.md" />
+    <File Path="build/release-notes-template.md" />
+    <File Path="build/ReleaseCommon.ps1" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/DdnsUpdate.Application/DdnsUpdate.Application.csproj" />

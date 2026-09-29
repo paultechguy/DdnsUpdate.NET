@@ -44,6 +44,10 @@ Tests use xUnit v3 on Microsoft Testing Platform (opted in via `global.json`'s `
   - `--once` is one real pass. Without either option, the app sleeps 60 minutes between passes.
   - Don't pass settings as command-line arguments. CommandLineParser rejects unknown arguments, and the app then exits with code 1 without running. Use environment variables instead, e.g. `cloudflareSettings__domains__0__isEnabled=true` to enable a fake domain.
   - A run writes logs to `%ProgramData%\PaulTechGuy\DdnsUpdate`. A dry run writes only logs there.
+- Releases are cut with the scripts in `build/`, ported from Marqora. See `docs/Releasing.md`.
+  - `New-ReleaseNotes.ps1` bumps the version and scaffolds the notes. `Publish-Release.ps1` fast-forwards `master` from `develop`, builds, tags and creates a draft GitHub release. It supports `-WhatIf`, `-Republish` and `-Verify`.
+  - Release notes live in `docs/releases/v<version>.md`, and the zip is built into `build/artifacts/`.
+  - Never run `Publish-Release.ps1` without `-WhatIf` unless the user asks.
 - The public site is `docs/index.html` (plus `docs/assets/`, `docs/sitemap.xml` and `docs/.nojekyll`), served by GitHub Pages from `master:/docs`. It is static HTML/CSS with no build step. Keep its claims in step with the README.
 - The publish must be single-file. `FilePathHelper` and `Program.Main` use `AppDomain.CurrentDomain.BaseDirectory` because `Assembly.Location` is empty in a bundle.
 - Building from a deeply nested path can hit the 260-character limit. That shows up as a misleading `MSB9008` "referenced project does not exist" warning.
