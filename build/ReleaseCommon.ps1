@@ -485,9 +485,13 @@ Something has been committed to '$Released' that is not on '$Development'. Rathe
   git merge origin/$Released
   git push origin $Development
 
-The first release after the 0.2.0 modernization needs this once: origin/$Released carries its own
-copy of the v0.1.0 source commit, with files identical to $Development's, so the merge joins the
-two histories without changing a file. See docs/Releasing.md.
+Exception, the first release after the 0.2.0 modernization: origin/$Released only carries its own
+copy of the v0.1.0 source commit (c9468b6, files identical to b413b75 on $Development). A plain
+merge of it conflicts, so join the histories keeping $Development's files as they are:
+
+  git merge -s ours origin/$Released -m "Join $Released's history to $Development"
+
+See docs/Releasing.md.
 "@
     }
 

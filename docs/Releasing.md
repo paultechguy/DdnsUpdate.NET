@@ -27,18 +27,26 @@ made separately from `develop`'s (`b413b75`). The two commits contain **identica
 git sees two histories, and the "master ancestor of develop" gate refuses to release until they
 are joined.
 
-Join them once, on `develop`, with an ordinary merge:
+An ordinary `git merge origin/master` does **not** work here. Both commits added the same files
+on top of the initial commit, and `develop` has changed most of them since, so git reports a
+dozen conflicts. Because `c9468b6` brings nothing that `develop` lacks, join the histories with
+the `ours` strategy, which records the merge but keeps `develop`'s files exactly as they are:
 
 ```powershell
 git switch develop
 git pull
-git merge origin/master -m "Join master's history to develop"
-git diff HEAD~1 --stat      # prints nothing: the merge changed no files
+git diff --stat b413b75 origin/master   # prints nothing: master adds no content
+git merge -s ours origin/master -m "Join master's history to develop"
+git diff --stat HEAD~1                  # prints nothing: the merge changed no files
 git push origin develop
 ```
 
+Only use `-s ours` after that first check prints nothing. It discards whatever the other side
+changed, which here is nothing.
+
 After that `master` is an ancestor of `develop` and stays one, because `master` only ever
-moves by the fast-forward in step 3. If the gate ever fails again, the fix is the same merge.
+moves by the fast-forward in step 3. If the gate ever fails again, someone committed to
+`master` directly. Then use an ordinary `git merge origin/master`, which keeps their change.
 
 ---
 
