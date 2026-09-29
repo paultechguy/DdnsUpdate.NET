@@ -29,7 +29,7 @@ To test the application, open up a Windows console and execute the application:
 If everything is working correctly, you should see:
 
     [12:30:54 INF] PRODUCTION environment detected
-    [12:30:54 INF] Starting DdnsUpdate by PaulTechGuy, v0.1.0.0
+    [12:30:54 INF] Starting DdnsUpdate by PaulTechGuy, v0.2.0.0
     [12:30:54 INF] Press Ctrl-C to cancel
     [12:30:54 INF] IP address updates will be performed every 60 minute(s)
     [12:30:54 INF] IP address updates will not push email notifications
@@ -52,23 +52,24 @@ We recommend putting your own values, especially the Cloudflare key and any SMTP
 Settings files are watched for changes, so edits take effect on the next update pass without restarting the application.
 
 ### Gathering your Cloudflare values
-To add DNS configurations, you will need to gather some information from your Cloudflare account.  For each domain, you will need the `Domain name`, `zone ID`, and the `record ID`.  In addition, for authenticating with the Cloudflare API, you will need your `authorization email` and `authorization key`.  Using your Cloudflare account, you can obtain these values:
+To add DNS configurations, you will need to gather some information from your Cloudflare account.  For each domain, you will need the `Domain name`, `zone ID`, and the `record ID`, plus credentials for the Cloudflare API.  Using your Cloudflare account, you can obtain these values:
 
 1.  Domain Name: This is the DNS record name to update (e.g. mycompany.com or home.mycompany.com).
-1.  Authorization Email: This is the email used for your account.
-1.  Authorization Key: Navigate to the *API Tokens* tab and view your *Global API Key*.
+1.  Credentials, one of:
+    1. **API Token (recommended)**: In *My Profile*, open *API Tokens*, choose *Create Token*, and start from the *Edit zone DNS* template.  Under *Zone Resources*, include the zone(s) you want to update.  The token can only edit DNS in those zones, which is far safer than the Global API Key.
+    1. **Global API Key (legacy)**: In *My Profile*, open *API Tokens* and view your *Global API Key*.  It grants full access to your account.  It also needs the `authorization email`, which is the email used for your account.
 1.  Zone ID: Navigate to the domain name.  On the *Overview* tab, you can view the Zone ID in the lower-right panel.
 1.  Record ID: This can be a bit difficult to find.  There are a few methods.
     1. Navigate to the *Manage Account* tab and view the Audit Log. If you have recently edited a domain name in your account, you can view that specific log entry.  It should contain a reference to the record ID.
-    1. You can use the Cloudflare API to get the record ID.  Using a *curl* command or a tool such as [Postman](https://www.postman.com/), submit a GET request.  You should be able to obtain the record ID from the result. Here is the format of an example *curl* command (replace the \{...\} tags with the required values):
+    1. You can use the Cloudflare API to get the record ID.  Using a *curl* command or a tool such as [Postman](https://www.postman.com/), submit a GET request.  You should be able to obtain the record ID from the result. Here is the format of an example *curl* command using an API token (replace the \{...\} tags with the required values):
 
           curl --location 'https://api.cloudflare.com/client/v4/zones/{zoneId}/dns_records' \
-            --header 'Content-Type: application/json' \
-            --header 'X-Auth-Email: {authEmail}' \
-            --header 'X-Auth-Key: {authKey}'
+            --header 'Authorization: Bearer {apiToken}'
+
+       With the Global API Key, replace the `Authorization` header with `--header 'X-Auth-Email: {authEmail}' --header 'X-Auth-Key: {authKey}'`.
 
 ### Configuring your domains
-Using these five values, you can now configure your DNS configuration(s):
+Using these values, you can now configure your DNS configuration(s):
 
     "cloudflareSettings": {
         "domains": [
@@ -80,8 +81,7 @@ Using these five values, you can now configure your DNS configuration(s):
                 // optionally leave blank and use domain defaults
                 "zoneId": "{zoneId}",
                 "recordType": "A",
-                "authorizationKey": "{authKey}",
-                "authorizationEmail": "{authEmail}"
+                "apiToken": "{apiToken}"
             }
         ]
     }
@@ -92,8 +92,7 @@ If you have more than one DNS record to configure, you can also enter default va
         "defaultDomain": {
             "zoneId": "",
             "recordType": "A",
-            "authorizationKey": "{authKey}",
-            "authorizationEmail": "{authEmail}"
+            "apiToken": "{apiToken}"
         },
         "domains": [
             {
@@ -104,13 +103,19 @@ If you have more than one DNS record to configure, you can also enter default va
                 // optionally leave blank and use domain defaults
                 "zoneId": "{zoneId}",
                 "recordType": "",
-                "authorizationKey": "",
-                "authorizationEmail": ""
+                "apiToken": ""
             }
         ]
     }
 
 >In this example, we opted to enter the zone ID in the domain property rather than the defaults. This is because zone IDs tend to be specific for different domains.
+
+To use the Global API Key instead of a token, replace `apiToken` with the two properties below, in a domain or in `defaultDomain`.  Existing configurations that use the key keep working unchanged.
+
+    "authorizationKey": "{authKey}",
+    "authorizationEmail": "{authEmail}"
+
+When a domain has its own `apiToken` or `authorizationKey`, it is used instead of the credentials in `defaultDomain`.  At either level, an `apiToken` takes priority over an `authorizationKey`.
 
 If a required value is missing from both the domain and `defaultDomain`, the application logs an `Invalid configuration` error naming the missing values and skips that domain.
 
@@ -120,7 +125,7 @@ The application updates records with a PATCH request, so other record settings, 
 You can now test the application to determine if the configuration values are correct, and if your Cloudflare DNS records are updating correctly.  Executing the application in a Windows console should indicate your domain(s) are updated:
 
     [12:30:54 INF] PRODUCTION environment detected
-    [12:30:54 INF] Starting DdnsUpdate by PaulTechGuy, v0.1.0.0
+    [12:30:54 INF] Starting DdnsUpdate by PaulTechGuy, v0.2.0.0
     [12:30:54 INF] Press Ctrl-C to cancel
     [12:30:54 INF] IP address updates will be performed every 60 minute(s)
     [12:30:54 INF] IP address updates will not push email notifications
@@ -229,6 +234,8 @@ To enable email, you will need access to an external SMTP email server.  Once an
         }
 
     >See [Gmail Help](https://support.google.com/mail/answer/185833) for assistance in creating Gmail application passwords.
+
+    With `smtpEnableSsl` set to `true`, the connection uses STARTTLS, or implicit TLS when `smtpPort` is 465.  Leave `smtpUsername` empty for a server that needs no sign-in.
 
 ## Execute with Windows Task Scheduler
 Using Windows Task Scheduler, create a task and add an Action. Set the `Program/script` using the full path of the application `DdnsUpdate.exe` file. Then specify the *Start in* option as the directory path of the `DdnsUpdate.exe` application. Finally, set the maximum number of DDNS update iterations to 1:

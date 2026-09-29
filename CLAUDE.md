@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DdnsUpdate is a Windows app that detects the machine's external IPv4 address and pushes it to Cloudflare DNS records. The same executable runs as a Windows Service, a Scheduled Task, or an interactive console app. It was derived from the `paultechguy/WinService.Net` template.
 
-**Which line this is:** this tree is the `v0.1.0` production line plus a Cloudflare PATCH fix. The GitHub `master` branch is an unrelated history with no common ancestor. It reads settings from a `config\` subfolder and names its exe `ddnsupdate.exe` in lowercase. Both lines report version 0.1.0. Don't port `config\`-folder behavior into this tree. See `docs/BUILDING.md`.
+**Which line this is:** this tree descends from the `v0.1.0` production line (plus a Cloudflare PATCH fix) and is now 0.2.0 (see `CHANGELOG.md`; the version is set in `Directory.Build.props`). The GitHub `master` branch is an unrelated history with no common ancestor. It reads settings from a `config\` subfolder, names its exe `ddnsupdate.exe` in lowercase, and also reports 0.1.0. Don't port `config\`-folder behavior into this tree. See `docs/BUILDING.md`.
 
 **Compatibility rule:** existing server settings files (especially `appsettings.production.user.json`) must keep working unchanged, so a deployment is just replacing `DdnsUpdate.exe`. Don't rename or restructure settings keys; new settings must be optional with defaults. The key `randomizeIpAddressProviderSelecion` is misspelled on purpose.
 
@@ -79,9 +79,14 @@ Each library registers its own services through an `IServiceCollection` extensio
 - **DdnsUpdate.DdnsProvider.Cloudflare** implements it.
   - It binds `IOptionsMonitor<CloudflareSettings>` to the `cloudflareSettings` section, where a per-domain empty field falls back to `defaultDomain`.
   - It sends a **PATCH** (not PUT) to `zones/{zoneId}/dns_records/{recordId}` on the named client `Cloudflare`, which has a base address and the standard resilience handler (retries).
-  - `X-Auth-Email`/`X-Auth-Key` are set on each request, not on the client, because updates run in parallel.
+  - Credentials are either `apiToken` (sent as `Authorization: Bearer`) or `authorizationKey` plus `authorizationEmail` (sent as `X-Auth-Key`/`X-Auth-Email`).
+  - `GetSettingsCredentials` resolves them: a domain's own token or key beats `defaultDomain`, and at each level a token beats a key.
+  - Auth headers are set on each request, not on the client, because updates run in parallel.
   - PUT resets omitted fields such as `proxied`, which silently turns off the Cloudflare proxy. Keep it PATCH.
-- **DdnsUpdate.Email**: an SMTP `IEmailSender` (`System.Net.Mail`). It reads `applicationSettings.emailSmtpSettings` through `IOptionsMonitor` at send time.
+- **DdnsUpdate.Email**: an `IEmailSender` using MailKit.
+  - It reads `applicationSettings.emailSmtpSettings` through `IOptionsMonitor` at send time.
+  - `smtpEnableSsl` maps to STARTTLS, or to implicit TLS when the port is 465; with it off there is no TLS.
+- **State**: `IDdnsStateStore` (Core) has `FileDdnsStateStore` (Service) as its production implementation. It owns `LastIpAddress.txt` and `UriStatistics.json`, so the worker never touches files directly.
 
 Runtime data (logs, `LastIpAddress.txt`, `UriStatistics.json`) lives in `%ProgramData%\PaulTechGuy\DdnsUpdate`, not beside the exe.
 

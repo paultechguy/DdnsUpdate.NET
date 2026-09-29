@@ -5,17 +5,19 @@ deploy it.
 
 ## What this tree is
 
-This is the `v0.1.0` line (tag `e2252fd`, 2024-02-23), which is what production
-runs. Settings files sit **flat** beside the executable. There is no `config`
-subfolder anywhere in this version, and the code has no concept of one:
-`Program.cs` sets the current directory to the executable directory and reads
-`.\appsettings.*.json` from there.
+This line descends from `v0.1.0` (tag `e2252fd`, 2024-02-23), the version
+production runs, and is now version `0.2.0` (see `CHANGELOG.md`). Settings files
+sit **flat** beside the executable. There is no `config` subfolder anywhere in
+this line, and the code has no concept of one: `Program.cs` sets the current
+directory to the executable directory and reads `.\appsettings.*.json` from
+there. Version 0.2.0 reads the same settings files as 0.1.0, so upgrading means
+replacing only `DdnsUpdate.exe`.
 
 Do not confuse this with the `master` line in the same GitHub repository. That
 is an unrelated history with no common ancestor, it reads settings from a
 `config` subfolder, and it names its executable `ddnsupdate.exe` in lowercase.
-Both report version `0.1.0`, so the version string cannot tell them apart. Use
-the settings location or the executable name casing instead.
+It also reports version `0.1.0`, so a `0.1.0` build cannot be told apart by its
+version string. Use the settings location or the executable name casing instead.
 
 ## Prerequisites
 

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
 
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Company>PaulTechGuy</Company>
     <Authors>PaulTechGuy</Authors>
     <Product>DdnsUpdate</Product>
